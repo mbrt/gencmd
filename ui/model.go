@@ -157,7 +157,7 @@ func (m Model) Selected() (string, bool) {
 }
 
 func RunUI(history []HistoryEntry) (string, bool, error) {
-	p := tea.NewProgram(New(history))
+	p := tea.NewProgram(New(history), tea.WithAltScreen())
 	m, err := p.Run()
 	if err != nil {
 		return "", false, err
