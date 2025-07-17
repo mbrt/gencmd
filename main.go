@@ -6,11 +6,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"os/exec"
-	"strings"
 
 	"github.com/adrg/xdg"
 	"github.com/joho/godotenv"
+	"github.com/mbrt/gencmd/ui"
 	"google.golang.org/genai"
 )
 
@@ -77,80 +76,23 @@ func updateHistory(prompt, command string) error {
 	return nil
 }
 
-func readChoiceFromFzf(choices []string) (string, error) {
-	cmd := exec.Command("fzf", "--print-query")
-	stdin, _ := cmd.StdinPipe()
-	go func() {
-		for _, choice := range choices {
-			fmt.Fprintln(stdin, choice)
-		}
-		stdin.Close()
-	}()
-
-	out, err := cmd.Output()
-	if err != nil {
-		return "", fmt.Errorf("running fzf: %w", err)
-	}
-	// fzf with --print-query returns the query on the first line and the
-	// selection on the second line
-	lines_out := strings.Split(strings.TrimSpace(string(out)), "\n")
-	if len(lines_out) == 0 {
-		return "", fmt.Errorf("no selection made")
-	}
-
-	// If there's only one line, it means no selection was made. Use the query
-	if len(lines_out) == 1 {
-		return lines_out[0], nil
-	}
-	// If there are two lines, return the selection.
-	return lines_out[1], nil
-}
-
-func readFromFzf() (string, bool, error) {
-	// Load the history from the JSONL file. On error, ignore
-	entries, _ := loadHistory()
-
-	if len(entries) == 0 {
-		// If no history is available, prompt the user for a new command
-		return "", false, fmt.Errorf("no history available, please enter a new command")
-	}
-
-	// Build fzf input
-	var lines []string
-	for _, e := range entries {
-		lines = append(lines, fmt.Sprintf("%s -> %s", e.Prompt, e.Command))
-	}
-	selection, err := readChoiceFromFzf(lines)
-	if err != nil {
-		return "", false, err
-	}
-	// Try to find the selected line in the history
-	for i, line := range lines {
-		if selection == line {
-			return entries[i].Command, false, nil
-		}
-	}
-	// If selection doesn't match any history entry, use the query as a new
-	// prompt
-	return selection, true, nil
-}
-
 func readCommand() (prompt string, isNew bool, err error) {
-	res, isNew, err := readFromFzf()
-	if err == nil {
-		return res, isNew, nil
+	entries, err := loadHistory()
+	if err != nil {
+		// Ignore errors, but we won't have history
+		entries = []historyEntry{}
 	}
 
-	// Fallback to reading from stdin
-	fmt.Print("Enter command: ")
-	scanner := bufio.NewScanner(os.Stdin)
-	if scanner.Scan() {
-		return scanner.Text(), true, nil
+	// Convert to the UI's history entry type
+	uiEntries := make([]ui.HistoryEntry, len(entries))
+	for i, e := range entries {
+		uiEntries[i] = ui.HistoryEntry{
+			Prompt:  e.Prompt,
+			Command: e.Command,
+		}
 	}
-	if err := scanner.Err(); err != nil {
-		return "", false, fmt.Errorf("reading command from stdin: %w", err)
-	}
-	return "", false, fmt.Errorf("no command entered")
+
+	return ui.RunUI(uiEntries)
 }
 
 func generateCommands(prompt string) ([]string, error) {
