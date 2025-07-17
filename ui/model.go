@@ -35,6 +35,8 @@ type Model struct {
 	isNewCommand bool
 	cancelled    bool
 	err          error
+	width        int
+	height       int
 }
 
 func New(history []HistoryEntry) Model {
@@ -42,12 +44,14 @@ func New(history []HistoryEntry) Model {
 	ti.Placeholder = "Search history or type a new command"
 	ti.Focus()
 	ti.CharLimit = 156
-	ti.Width = 50
+	ti.Width = 80 // Default width, will be updated when window size is known
 
 	return Model{
 		history:   history,
 		textInput: ti,
 		err:       nil,
+		width:     80, // Default width
+		height:    24, // Default height
 	}
 }
 
@@ -59,6 +63,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 
 	switch msg := msg.(type) {
+	case tea.WindowSizeMsg:
+		m.width = msg.Width
+		m.height = msg.Height
+		m.textInput.Width = msg.Width - 4 // Leave some padding
+		return m, nil
+
 	case tea.KeyMsg:
 		switch msg.Type {
 		case tea.KeyEnter:
@@ -78,21 +88,22 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.cancelled = true
 			return m, tea.Quit
 
-		case tea.KeyUp, tea.KeyDown:
+		case tea.KeyUp, tea.KeyCtrlK:
 			if len(m.matches) == 0 {
 				break
 			}
-			if msg.Type == tea.KeyUp {
-				m.cursor--
-			} else {
-				m.cursor++
-			}
-
-			if m.cursor >= len(m.matches) {
-				m.cursor = 0
-			}
+			m.cursor--
 			if m.cursor < 0 {
 				m.cursor = len(m.matches) - 1
+			}
+
+		case tea.KeyDown, tea.KeyCtrlJ:
+			if len(m.matches) == 0 {
+				break
+			}
+			m.cursor++
+			if m.cursor >= len(m.matches) {
+				m.cursor = 0
 			}
 
 		default:
@@ -131,9 +142,19 @@ func (m Model) View() string {
 	b.WriteString(titleStyle.Render("gencmd"))
 	b.WriteString("\n\n")
 
-	for i := 0; i < len(m.matches); i++ {
-		match := m.matches[i]
-		entry := m.history[match.Index]
+	var entries []HistoryEntry
+	if m.textInput.Value() == "" {
+		// If no input, show all history
+		entries = m.history
+	} else {
+		for _, match := range m.matches {
+			entries = append(entries, m.history[match.Index])
+		}
+	}
+
+	// Display the matches
+	for i := 0; i < len(entries); i++ {
+		entry := entries[i]
 		line := fmt.Sprintf("%s -> %s", entry.Prompt, entry.Command)
 		if m.cursor == i {
 			b.WriteString(selectedItemStyle.Render("> " + line))
