@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/sahilm/fuzzy"
 )
 
 type (
@@ -26,32 +26,55 @@ type HistoryEntry struct {
 	Command string
 }
 
+// Implement list.Item interface
+func (h HistoryEntry) FilterValue() string {
+	return h.Prompt + " " + h.Command
+}
+
+// Implement list.DefaultItem interface
+func (h HistoryEntry) Title() string {
+	return h.Prompt
+}
+
+func (h HistoryEntry) Description() string {
+	return h.Command
+}
+
 type Model struct {
-	history      []HistoryEntry
-	matches      fuzzy.Matches
+	list         list.Model
 	textInput    textinput.Model
-	cursor       int
+	allItems     []list.Item
 	selected     string
 	isNewCommand bool
 	cancelled    bool
 	err          error
-	width        int
-	height       int
 }
 
 func New(history []HistoryEntry) Model {
+	// Convert history entries to list items
+	items := make([]list.Item, len(history))
+	for i, entry := range history {
+		items[i] = entry
+	}
+
+	// Create the list
+	l := list.New(items, list.NewDefaultDelegate(), 80, 24)
+	l.Title = "Command History"
+	l.SetShowStatusBar(false)
+	l.SetFilteringEnabled(true)
+	l.Styles.Title = titleStyle
+
+	// Create text input
 	ti := textinput.New()
 	ti.Placeholder = "Search history or type a new command"
 	ti.Focus()
 	ti.CharLimit = 156
-	ti.Width = 80 // Default width, will be updated when window size is known
+	ti.Width = 80
 
 	return Model{
-		history:   history,
+		list:      l,
 		textInput: ti,
-		err:       nil,
-		width:     80, // Default width
-		height:    24, // Default height
+		allItems:  items, // Store all items for filtering
 	}
 }
 
@@ -61,55 +84,52 @@ func (m Model) Init() tea.Cmd {
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
+	var cmds []tea.Cmd
 
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
-		m.width = msg.Width
-		m.height = msg.Height
-		m.textInput.Width = msg.Width - 4 // Leave some padding
+		m.list.SetWidth(msg.Width)
+		m.list.SetHeight(msg.Height - 4) // Leave space for input and title
+		m.textInput.Width = msg.Width - 4
 		return m, nil
 
 	case tea.KeyMsg:
+		// Handle global keys first
 		switch msg.Type {
-		case tea.KeyEnter:
-			if m.textInput.Value() == "" {
-				return m, tea.Quit
-			}
-			if len(m.matches) > 0 && m.cursor < len(m.matches) {
-				m.selected = m.history[m.matches[m.cursor].Index].Command
-				m.isNewCommand = false
-			} else {
-				m.selected = m.textInput.Value()
-				m.isNewCommand = true
-			}
-			return m, tea.Quit
-
 		case tea.KeyCtrlC, tea.KeyEsc:
 			m.cancelled = true
 			return m, tea.Quit
 
+		case tea.KeyEnter:
+			if selectedItem := m.list.SelectedItem(); selectedItem != nil {
+				entry := selectedItem.(HistoryEntry)
+				m.selected = entry.Command
+				m.isNewCommand = false
+				return m, tea.Quit
+			}
+			// User typed a new command
+			m.selected = m.textInput.Value()
+			m.isNewCommand = true
+			return m, tea.Quit
+
 		case tea.KeyUp, tea.KeyCtrlK:
-			if len(m.matches) == 0 {
-				break
-			}
-			m.cursor--
-			if m.cursor < 0 {
-				m.cursor = len(m.matches) - 1
-			}
+			m.list.CursorUp()
 
 		case tea.KeyDown, tea.KeyCtrlJ:
-			if len(m.matches) == 0 {
-				break
-			}
-			m.cursor++
-			if m.cursor >= len(m.matches) {
-				m.cursor = 0
-			}
+			m.list.CursorDown()
+		}
 
-		default:
-			m.textInput, cmd = m.textInput.Update(msg)
-			m.updateMatches()
-			return m, cmd
+		// Store the old value to detect changes
+		oldValue := m.textInput.Value()
+
+		// Update text input
+		m.textInput, cmd = m.textInput.Update(msg)
+		cmds = append(cmds, cmd)
+
+		// Check if the input value changed and update filtering
+		newValue := m.textInput.Value()
+		if newValue != oldValue {
+			m.filterItems(newValue)
 		}
 
 	case errMsg:
@@ -117,20 +137,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	m.textInput, cmd = m.textInput.Update(msg)
-	m.updateMatches()
-	return m, cmd
+	return m, tea.Batch(cmds...)
 }
 
-func (m *Model) updateMatches() {
-	var historyStrings []string
-	for _, h := range m.history {
-		historyStrings = append(historyStrings, fmt.Sprintf("%s -> %s", h.Prompt, h.Command))
-	}
-	m.matches = fuzzy.Find(m.textInput.Value(), historyStrings)
-	if m.cursor >= len(m.matches) {
-		m.cursor = 0
-	}
+func (m *Model) filterItems(query string) {
+	m.list.SetFilterText(query)
 }
 
 func (m Model) View() string {
@@ -142,30 +153,15 @@ func (m Model) View() string {
 	b.WriteString(titleStyle.Render("gencmd"))
 	b.WriteString("\n\n")
 
-	var entries []HistoryEntry
-	if m.textInput.Value() == "" {
-		// If no input, show all history
-		entries = m.history
-	} else {
-		for _, match := range m.matches {
-			entries = append(entries, m.history[match.Index])
-		}
-	}
+	b.WriteString(m.list.View())
+	b.WriteString("\n")
 
-	// Display the matches
-	for i := 0; i < len(entries); i++ {
-		entry := entries[i]
-		line := fmt.Sprintf("%s -> %s", entry.Prompt, entry.Command)
-		if m.cursor == i {
-			b.WriteString(selectedItemStyle.Render("> " + line))
-		} else {
-			b.WriteString(itemStyle.Render(line))
-		}
-		b.WriteString("\n")
-	}
-
+	// Always show the text input
 	b.WriteString(promptStyle.Render(m.textInput.View()))
 	b.WriteString("\n")
+
+	// Show help text
+	b.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("241")).Render("Enter: confirm • Esc: cancel"))
 
 	return b.String()
 }
