@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 
@@ -14,6 +15,8 @@ import (
 )
 
 const model = "gemini-2.0-flash-lite"
+
+var userCancelErr = errors.New("user cancelled")
 
 func loadEnv() {
 	// Load the environment variables from the XDG configuration directory or
@@ -139,6 +142,9 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("reading command: %w", err)
 	}
+	if prompt == "" {
+		return userCancelErr
+	}
 	if !isNew {
 		fmt.Println(prompt)
 		return nil
@@ -155,7 +161,10 @@ func run() error {
 func main() {
 	loadEnv()
 	if err := run(); err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		// Do not print the error if the user cancelled the operation
+		if !errors.Is(err, userCancelErr) {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		}
 		os.Exit(1)
 	}
 }

@@ -33,6 +33,7 @@ type Model struct {
 	cursor       int
 	selected     string
 	isNewCommand bool
+	cancelled    bool
 	err          error
 }
 
@@ -74,6 +75,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 
 		case tea.KeyCtrlC, tea.KeyEsc:
+			m.cancelled = true
 			return m, tea.Quit
 
 		case tea.KeyUp, tea.KeyDown:
@@ -148,6 +150,9 @@ func (m Model) View() string {
 }
 
 func (m Model) Selected() (string, bool) {
+	if m.cancelled {
+		return "", false
+	}
 	return m.selected, m.isNewCommand
 }
 
@@ -159,8 +164,5 @@ func RunUI(history []HistoryEntry) (string, bool, error) {
 	}
 	finalModel := m.(Model)
 	selected, isNew := finalModel.Selected()
-	if selected == "" && !isNew {
-		return "", false, fmt.Errorf("no selection made")
-	}
 	return selected, isNew, nil
 }
