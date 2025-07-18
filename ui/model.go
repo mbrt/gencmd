@@ -7,6 +7,7 @@ import (
 	"github.com/charmbracelet/bubbles/help"
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/list"
+	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -20,6 +21,15 @@ var (
 	selectedItemStyle = lipgloss.NewStyle().PaddingLeft(2).Foreground(lipgloss.Color("170"))
 	helpStyle         = lipgloss.NewStyle().Padding(1, 0, 0, 2)
 	promptStyle       = lipgloss.NewStyle().PaddingTop(1)
+	spinnerStyle      = lipgloss.NewStyle().Foreground(lipgloss.Color("205"))
+)
+
+type state int
+
+const (
+	statePrompting state = iota
+	stateGenerating
+	stateSelected
 )
 
 func RunUI(c *ctrl.Controller) error {
@@ -30,25 +40,22 @@ func RunUI(c *ctrl.Controller) error {
 		return fmt.Errorf("running UI: %w", err)
 	}
 	finalModel := m.(Model)
-	if finalModel.cancelled {
-		return nil
-	}
 	c.OutputCommand(finalModel.selected)
 	return nil
 }
 
 type Model struct {
-	controller   *ctrl.Controller
-	KeyMap       KeyMap
-	list         list.Model
-	help         help.Model
-	textInput    textinput.Model
-	history      []list.Item
-	prompt       string
-	selected     string
-	isNewCommand bool
-	cancelled    bool
-	err          error
+	KeyMap KeyMap
+
+	controller *ctrl.Controller
+	list       list.Model
+	help       help.Model
+	textInput  textinput.Model
+	spinner    spinner.Model
+	state      state
+	prompt     string
+	selected   string
+	err        error
 }
 
 func New(c *ctrl.Controller) Model {
@@ -66,7 +73,7 @@ func New(c *ctrl.Controller) Model {
 	l.Styles.Title = titleStyle
 	l.SetShowHelp(false)
 
-	// Create help model
+	// Create help
 	h := help.New()
 
 	// Create text input
@@ -76,18 +83,24 @@ func New(c *ctrl.Controller) Model {
 	ti.CharLimit = 156
 	ti.Width = 80
 
+	// Create spinner
+	s := spinner.New()
+	s.Spinner = spinner.Dot
+	s.Style = spinnerStyle
+
 	return Model{
 		controller: c,
 		KeyMap:     DefaultKeyMap(),
 		list:       l,
 		help:       h,
 		textInput:  ti,
-		history:    items,
+		state:      statePrompting,
+		spinner:    s,
 	}
 }
 
 func (m Model) Init() tea.Cmd {
-	return textinput.Blink
+	return tea.Batch(textinput.Blink, m.spinner.Tick)
 }
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -106,16 +119,19 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.err = fmt.Errorf("no commands generated")
 			return m, nil
 		}
-		m.selected = msg[0]
-		m.controller.UpdateHistory(m.prompt, msg[0])
+		m.selectCommand(m.prompt, msg[0])
 		return m, tea.Quit
 
 	case errMsg:
+		m.state = stateSelected
 		m.err = msg
 		return m, nil
-	}
 
-	return m, nil
+	default:
+		var cmd tea.Cmd
+		m.spinner, cmd = m.spinner.Update(msg)
+		return m, cmd
+	}
 }
 
 func (m Model) View() string {
@@ -127,15 +143,20 @@ func (m Model) View() string {
 	b.WriteString(titleStyle.Render("gencmd"))
 	b.WriteString("\n\n")
 
-	b.WriteString(m.list.View())
-	b.WriteString("\n")
+	if m.state == stateGenerating {
+		b.WriteString(m.spinner.View())
+		b.WriteString(" Generating commands...\n")
+	} else {
+		b.WriteString(m.list.View())
+		b.WriteString("\n")
 
-	// Show help text
-	b.WriteString(helpStyle.Render(m.help.View(m)))
+		// Show help text
+		b.WriteString(helpStyle.Render(m.help.View(m)))
 
-	// Always show the text input
-	b.WriteString(promptStyle.Render(m.textInput.View()))
-	b.WriteString("\n")
+		// Show the text input
+		b.WriteString(promptStyle.Render(m.textInput.View()))
+		b.WriteString("\n")
+	}
 
 	return b.String()
 }
@@ -158,19 +179,18 @@ func (m Model) FullHelp() [][]key.Binding {
 func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch {
 	case key.Matches(msg, m.KeyMap.Cancel):
-		m.cancelled = true
+		m.selectCommand("", "")
 		return m, tea.Quit
 
 	case key.Matches(msg, m.KeyMap.Submit):
 		if selectedItem := m.list.SelectedItem(); selectedItem != nil {
 			he := selectedItem.(historyEntry)
-			m.prompt = he.Prompt
-			m.selected = he.Command
+			m.selectCommand("", he.Command)
 			return m, tea.Quit
 		}
 		// User typed a new command
 		m.prompt = m.textInput.Value()
-		cmd := m.runGenerate(m.prompt)
+		cmd := m.runGenerate()
 		return m, cmd
 
 	case key.Matches(msg, m.KeyMap.Up):
@@ -206,13 +226,23 @@ func (m *Model) filterItems(query string) {
 	m.list.SetFilterText(query)
 }
 
-func (m Model) runGenerate(prompt string) tea.Cmd {
+func (m *Model) runGenerate() tea.Cmd {
+	m.state = stateGenerating
 	return func() tea.Msg {
-		cmds, err := m.controller.GenerateCommands(prompt)
+		cmds, err := m.controller.GenerateCommands(m.prompt)
 		if err != nil {
 			return errMsg(err)
 		}
 		return generateMsg(cmds)
+	}
+}
+
+func (m *Model) selectCommand(prompt, command string) {
+	m.prompt = prompt
+	m.selected = command
+	m.state = stateSelected
+	if command != "" && prompt != "" {
+		m.controller.UpdateHistory(prompt, command)
 	}
 }
 
