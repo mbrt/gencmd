@@ -14,10 +14,6 @@ import (
 	"github.com/mbrt/gencmd/ctrl"
 )
 
-type (
-	errMsg error
-)
-
 var (
 	titleStyle        = lipgloss.NewStyle().Background(lipgloss.Color("62")).Foreground(lipgloss.Color("230")).Padding(0, 1)
 	itemStyle         = lipgloss.NewStyle().PaddingLeft(4)
@@ -48,6 +44,7 @@ type Model struct {
 	help         help.Model
 	textInput    textinput.Model
 	history      []list.Item
+	prompt       string
 	selected     string
 	isNewCommand bool
 	cancelled    bool
@@ -104,6 +101,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		return m.handleKey(msg)
 
+	case generateMsg:
+		if len(msg) == 0 {
+			m.err = fmt.Errorf("no commands generated")
+			return m, nil
+		}
+		m.selected = msg[0]
+		m.controller.UpdateHistory(m.prompt, msg[0])
+		return m, tea.Quit
+
 	case errMsg:
 		m.err = msg
 		return m, nil
@@ -157,38 +163,36 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	case key.Matches(msg, m.KeyMap.Submit):
 		if selectedItem := m.list.SelectedItem(); selectedItem != nil {
-			m.selected = selectedItem.(historyEntry).Command
+			he := selectedItem.(historyEntry)
+			m.prompt = he.Prompt
+			m.selected = he.Command
 			return m, tea.Quit
 		}
 		// User typed a new command
-		prompt := m.textInput.Value()
-		cmds, err := m.controller.GenerateCommands(prompt)
-		if err != nil {
-			m.err = err
-			return m, nil
-		}
-		m.selected = cmds[0]
-		m.controller.UpdateHistory(prompt, cmds[0])
-		return m, tea.Quit
+		m.prompt = m.textInput.Value()
+		cmd := m.runGenerate(m.prompt)
+		return m, cmd
 
 	case key.Matches(msg, m.KeyMap.Up):
 		m.list.CursorUp()
+		return m, nil
 
 	case key.Matches(msg, m.KeyMap.Down):
 		m.list.CursorDown()
-	}
+		return m, nil
 
-	// Handle text input updates.
-	// Store the old value, update and compare for changes.
-	oldValue := m.textInput.Value()
-	var cmd tea.Cmd
-	m.textInput, cmd = m.textInput.Update(msg)
-	newValue := m.textInput.Value()
-	if newValue != oldValue {
-		m.filterItems(newValue)
+	default:
+		// Handle text input updates.
+		// Store the old value, update and compare for changes.
+		oldValue := m.textInput.Value()
+		var cmd tea.Cmd
+		m.textInput, cmd = m.textInput.Update(msg)
+		newValue := m.textInput.Value()
+		if newValue != oldValue {
+			m.filterItems(newValue)
+		}
+		return m, cmd
 	}
-
-	return m, cmd
 }
 
 func (m *Model) filterItems(query string) {
@@ -200,6 +204,16 @@ func (m *Model) filterItems(query string) {
 		m.list.SetFilteringEnabled(true)
 	}
 	m.list.SetFilterText(query)
+}
+
+func (m Model) runGenerate(prompt string) tea.Cmd {
+	return func() tea.Msg {
+		cmds, err := m.controller.GenerateCommands(prompt)
+		if err != nil {
+			return errMsg(err)
+		}
+		return generateMsg(cmds)
+	}
 }
 
 type historyEntry struct {
@@ -219,3 +233,7 @@ func (h historyEntry) Title() string {
 func (h historyEntry) Description() string {
 	return h.Command
 }
+
+type errMsg error
+
+type generateMsg []string
