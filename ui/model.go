@@ -6,8 +6,6 @@ import (
 
 	"github.com/charmbracelet/bubbles/help"
 	"github.com/charmbracelet/bubbles/key"
-	"github.com/charmbracelet/bubbles/spinner"
-	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
@@ -18,9 +16,8 @@ var (
 	titleStyle        = lipgloss.NewStyle().Background(lipgloss.Color("62")).Foreground(lipgloss.Color("230")).Padding(0, 1)
 	itemStyle         = lipgloss.NewStyle().PaddingLeft(4)
 	selectedItemStyle = lipgloss.NewStyle().PaddingLeft(2).Foreground(lipgloss.Color("170"))
-	helpStyle         = lipgloss.NewStyle().Padding(1, 0, 0, 2)
+	helpStyle         = lipgloss.NewStyle().PaddingTop(1).PaddingLeft(2)
 	promptStyle       = lipgloss.NewStyle().PaddingTop(1)
-	spinnerStyle      = lipgloss.NewStyle().Foreground(lipgloss.Color("205"))
 )
 
 type state int
@@ -48,49 +45,50 @@ type Model struct {
 
 	controller *ctrl.Controller
 	prompt     promptModel
+	wait       waitModel
 	help       help.Model
-	spinner    spinner.Model
 	state      state
 	selected   string
 	err        error
 }
 
 func New(c *ctrl.Controller) Model {
-	// Create prompt model
-	promptM := newPromptModel(DefaultKeyMap(), c.LoadHistory())
-
-	// Create help
+	km := DefaultKeyMap()
 	h := help.New()
-
-	// Create spinner
-	s := spinner.New()
-	s.Spinner = spinner.Dot
-	s.Style = spinnerStyle
-
 	return Model{
 		controller: c,
-		KeyMap:     DefaultKeyMap(),
-		prompt:     promptM,
+		KeyMap:     km,
+		prompt:     newPromptModel(km, c.LoadHistory()),
+		wait:       newWaitModel(km),
 		help:       h,
 		state:      statePrompting,
-		spinner:    s,
 	}
 }
 
 func (m Model) Init() tea.Cmd {
-	return tea.Batch(textinput.Blink, m.spinner.Tick)
+	return tea.Batch(
+		m.prompt.Init(),
+		m.wait.Init(),
+	)
 }
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	var cmds []tea.Cmd
+	var cmd tea.Cmd
+
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
-		msg.Height -= 4 // Leave space for help and title
-		var cmd tea.Cmd
-		m.prompt, cmd = m.prompt.Update(msg)
-		return m, cmd
+		// Leave space for help and title
+		msg.Height -= 4
+		// Forward window size message to models
+		m, cmd = m.updateModels(msg, false)
+		cmds = append(cmds, cmd)
 
 	case tea.KeyMsg:
-		return m.handleKey(msg)
+		m, cmd = m.handleKey(msg)
+		cmds = append(cmds, cmd)
+		m, cmd = m.updateModels(msg, false)
+		cmds = append(cmds, cmd)
 
 	case generateMsg:
 		if len(msg.Commands) == 0 {
@@ -108,10 +106,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	default:
-		var cmd tea.Cmd
-		m.spinner, cmd = m.spinner.Update(msg)
-		return m, cmd
+		m, cmd = m.updateModels(msg, false)
+		cmds = append(cmds, cmd)
 	}
+
+	return m, tea.Batch(cmds...)
 }
 
 func (m Model) View() string {
@@ -121,16 +120,17 @@ func (m Model) View() string {
 
 	var b strings.Builder
 	b.WriteString(titleStyle.Render("gencmd"))
-	b.WriteString("\n\n")
+	b.WriteString("\n")
 
-	if m.state == stateGenerating {
-		b.WriteString(m.spinner.View())
-		b.WriteString(" Generating commands...\n")
-	} else {
+	switch m.state {
+	case statePrompting:
 		b.WriteString(m.prompt.View())
-		// Show help text
-		b.WriteString(helpStyle.Render(m.help.View(m)))
+	case stateGenerating:
+		b.WriteString(m.wait.View())
 	}
+
+	// Show help text
+	b.WriteString(helpStyle.Render(m.help.View(m)))
 
 	return b.String()
 }
@@ -147,7 +147,22 @@ func (m Model) FullHelp() [][]key.Binding {
 	return [][]key.Binding{m.ShortHelp()}
 }
 
-func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+func (m Model) updateModels(msg tea.Msg, onlyActive bool) (Model, tea.Cmd) {
+	var cmds []tea.Cmd
+	var cmd tea.Cmd
+
+	if !onlyActive || m.state == statePrompting {
+		m.prompt, cmd = m.prompt.Update(msg)
+		cmds = append(cmds, cmd)
+	}
+	if !onlyActive || m.state == stateGenerating {
+		m.wait, cmd = m.wait.Update(msg)
+		cmds = append(cmds, cmd)
+	}
+	return m, tea.Batch(cmds...)
+}
+
+func (m Model) handleKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 	switch {
 	case key.Matches(msg, m.KeyMap.Cancel):
 		m.selected = ""
@@ -165,14 +180,9 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.state = stateSelected
 			return m, tea.Quit
 		}
-		// TODO:
-		return m, nil
-
-	default:
-		var cmd tea.Cmd
-		m.prompt, cmd = m.prompt.Update(msg)
-		return m, cmd
 	}
+
+	return m, nil
 }
 
 func (m *Model) runGenerate(prompt string) tea.Cmd {

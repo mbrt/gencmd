@@ -25,7 +25,11 @@ func newPromptModel(km KeyMap, history []ctrl.HistoryEntry) promptModel {
 
 	// Create text input
 	ti := textinput.New()
-	ti.Placeholder = "Search history or type a new command"
+	if len(history) > 0 {
+		ti.Placeholder = "Search history or type a new prompt"
+	} else {
+		ti.Placeholder = "Type a prompt"
+	}
 	ti.Focus()
 	ti.CharLimit = 156
 	ti.Width = 80
@@ -67,8 +71,10 @@ func (m promptModel) Update(msg tea.Msg) (promptModel, tea.Cmd) {
 func (m promptModel) View() string {
 	var b strings.Builder
 
-	b.WriteString(m.list.View())
-	b.WriteString("\n")
+	if len(m.list.Items()) > 0 {
+		b.WriteString(m.list.View())
+		b.WriteString("\n")
+	}
 
 	// Show the text input
 	b.WriteString(promptStyle.Render(m.textInput.View()))
