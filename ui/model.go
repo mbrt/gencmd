@@ -68,9 +68,8 @@ func New(c *ctrl.Controller) Model {
 
 	// Create the list
 	l := list.New(items, list.NewDefaultDelegate(), 80, 24)
-	l.Title = "gencmd"
+	l.SetShowTitle(false)
 	l.SetFilteringEnabled(true)
-	l.Styles.Title = titleStyle
 	l.SetShowHelp(false)
 
 	// Create help
@@ -107,7 +106,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.list.SetWidth(msg.Width)
-		m.list.SetHeight(msg.Height - 4) // Leave space for input and title
+		// Leave space for input and title
+		m.list.SetHeight(msg.Height - 6)
 		m.textInput.Width = msg.Width - 4
 		return m, nil
 
