@@ -10,6 +10,8 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+
+	"github.com/mbrt/gencmd/ctrl"
 )
 
 type (
@@ -24,26 +26,23 @@ var (
 	promptStyle       = lipgloss.NewStyle().PaddingTop(1)
 )
 
-type HistoryEntry struct {
-	Prompt  string
-	Command string
-}
-
-// Implement list.Item interface
-func (h HistoryEntry) FilterValue() string {
-	return h.Prompt + " " + h.Command
-}
-
-// Implement list.DefaultItem interface
-func (h HistoryEntry) Title() string {
-	return h.Prompt
-}
-
-func (h HistoryEntry) Description() string {
-	return h.Command
+func RunUI(c *ctrl.Controller) error {
+	p := tea.NewProgram(New(c), tea.WithAltScreen())
+	// TODO: Add a fallback for when we don't have a terminal
+	m, err := p.Run()
+	if err != nil {
+		return fmt.Errorf("running UI: %w", err)
+	}
+	finalModel := m.(Model)
+	if finalModel.cancelled {
+		return nil
+	}
+	c.OutputCommand(finalModel.selected)
+	return nil
 }
 
 type Model struct {
+	controller   *ctrl.Controller
 	KeyMap       KeyMap
 	list         list.Model
 	help         help.Model
@@ -55,11 +54,12 @@ type Model struct {
 	err          error
 }
 
-func New(history []HistoryEntry) Model {
+func New(c *ctrl.Controller) Model {
 	// Convert history entries to list items
+	history := c.LoadHistory()
 	items := make([]list.Item, len(history))
 	for i, entry := range history {
-		items[i] = entry
+		items[i] = historyEntry{entry}
 	}
 
 	// Create the list
@@ -80,11 +80,12 @@ func New(history []HistoryEntry) Model {
 	ti.Width = 80
 
 	return Model{
-		KeyMap:    DefaultKeyMap(),
-		list:      l,
-		help:      h,
-		textInput: ti,
-		history:   items,
+		controller: c,
+		KeyMap:     DefaultKeyMap(),
+		list:       l,
+		help:       h,
+		textInput:  ti,
+		history:    items,
 	}
 }
 
@@ -111,6 +112,43 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+func (m Model) View() string {
+	if m.err != nil {
+		return fmt.Sprintf("\nError: %v\n\n", m.err)
+	}
+
+	var b strings.Builder
+	b.WriteString(titleStyle.Render("gencmd"))
+	b.WriteString("\n\n")
+
+	b.WriteString(m.list.View())
+	b.WriteString("\n")
+
+	// Show help text
+	b.WriteString(helpStyle.Render(m.help.View(m)))
+
+	// Always show the text input
+	b.WriteString(promptStyle.Render(m.textInput.View()))
+	b.WriteString("\n")
+
+	return b.String()
+}
+
+func (m Model) ShortHelp() []key.Binding {
+	bindings := []key.Binding{
+		m.KeyMap.Submit,
+		m.KeyMap.Cancel,
+	}
+	if m.list.SelectedItem() != nil {
+		bindings = append(bindings, m.KeyMap.Up, m.KeyMap.Down)
+	}
+	return bindings
+}
+
+func (m Model) FullHelp() [][]key.Binding {
+	return [][]key.Binding{m.ShortHelp()}
+}
+
 func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch {
 	case key.Matches(msg, m.KeyMap.Cancel):
@@ -119,14 +157,18 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	case key.Matches(msg, m.KeyMap.Submit):
 		if selectedItem := m.list.SelectedItem(); selectedItem != nil {
-			entry := selectedItem.(HistoryEntry)
-			m.selected = entry.Command
-			m.isNewCommand = false
+			m.selected = selectedItem.(historyEntry).Command
 			return m, tea.Quit
 		}
 		// User typed a new command
-		m.selected = m.textInput.Value()
-		m.isNewCommand = true
+		prompt := m.textInput.Value()
+		cmds, err := m.controller.GenerateCommands(prompt)
+		if err != nil {
+			m.err = err
+			return m, nil
+		}
+		m.selected = cmds[0]
+		m.controller.UpdateHistory(prompt, cmds[0])
 		return m, tea.Quit
 
 	case key.Matches(msg, m.KeyMap.Up):
@@ -150,65 +192,30 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m *Model) filterItems(query string) {
-	if query == "" {
+	if len(query) == 0 {
 		m.list.SetFilteringEnabled(false)
-	} else {
+		return
+	}
+	if len(query) == 1 {
 		m.list.SetFilteringEnabled(true)
-		m.list.SetFilterText(query)
 	}
+	m.list.SetFilterText(query)
 }
 
-func (m Model) View() string {
-	if m.err != nil {
-		return fmt.Sprintf("\nError: %v\n\n", m.err)
-	}
-
-	var b strings.Builder
-	b.WriteString(titleStyle.Render("gencmd"))
-	b.WriteString("\n\n")
-
-	b.WriteString(m.list.View())
-	b.WriteString("\n")
-
-	// Show help text
-	b.WriteString(helpStyle.Render(m.help.View(m)))
-
-	// Always show the text input
-	b.WriteString(promptStyle.Render(m.textInput.View()))
-	b.WriteString("\n")
-
-	return b.String()
+type historyEntry struct {
+	ctrl.HistoryEntry
 }
 
-func (m Model) Selected() (string, bool) {
-	if m.cancelled {
-		return "", false
-	}
-	return m.selected, m.isNewCommand
+// Implement list.Item interface
+func (h historyEntry) FilterValue() string {
+	return h.Prompt + " " + h.Command
 }
 
-func (m Model) ShortHelp() []key.Binding {
-	bindings := []key.Binding{
-		m.KeyMap.Submit,
-		m.KeyMap.Cancel,
-	}
-	if m.list.SelectedItem() != nil {
-		bindings = append(bindings, m.KeyMap.Up, m.KeyMap.Down)
-	}
-	return bindings
+// Implement list.DefaultItem interface
+func (h historyEntry) Title() string {
+	return h.Prompt
 }
 
-func (m Model) FullHelp() [][]key.Binding {
-	return [][]key.Binding{m.ShortHelp()}
-}
-
-func RunUI(history []HistoryEntry) (string, bool, error) {
-	p := tea.NewProgram(New(history), tea.WithAltScreen())
-	m, err := p.Run()
-	if err != nil {
-		return "", false, err
-	}
-	finalModel := m.(Model)
-	selected, isNew := finalModel.Selected()
-	return selected, isNew, nil
+func (h historyEntry) Description() string {
+	return h.Command
 }
