@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/charmbracelet/bubbles/help"
+	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
@@ -18,7 +20,8 @@ var (
 	titleStyle        = lipgloss.NewStyle().Background(lipgloss.Color("62")).Foreground(lipgloss.Color("230")).Padding(0, 1)
 	itemStyle         = lipgloss.NewStyle().PaddingLeft(4)
 	selectedItemStyle = lipgloss.NewStyle().PaddingLeft(2).Foreground(lipgloss.Color("170"))
-	promptStyle       = lipgloss.NewStyle().Margin(1, 0, 0, 0)
+	helpStyle         = lipgloss.NewStyle().Padding(1, 0, 0, 2)
+	promptStyle       = lipgloss.NewStyle().PaddingTop(1)
 )
 
 type HistoryEntry struct {
@@ -41,9 +44,11 @@ func (h HistoryEntry) Description() string {
 }
 
 type Model struct {
+	KeyMap       KeyMap
 	list         list.Model
+	help         help.Model
 	textInput    textinput.Model
-	allItems     []list.Item
+	history      []list.Item
 	selected     string
 	isNewCommand bool
 	cancelled    bool
@@ -59,10 +64,13 @@ func New(history []HistoryEntry) Model {
 
 	// Create the list
 	l := list.New(items, list.NewDefaultDelegate(), 80, 24)
-	l.Title = "Command History"
-	l.SetShowStatusBar(false)
+	l.Title = "gencmd"
 	l.SetFilteringEnabled(true)
 	l.Styles.Title = titleStyle
+	l.SetShowHelp(false)
+
+	// Create help model
+	h := help.New()
 
 	// Create text input
 	ti := textinput.New()
@@ -72,9 +80,11 @@ func New(history []HistoryEntry) Model {
 	ti.Width = 80
 
 	return Model{
+		KeyMap:    DefaultKeyMap(),
 		list:      l,
+		help:      h,
 		textInput: ti,
-		allItems:  items, // Store all items for filtering
+		history:   items,
 	}
 }
 
@@ -83,9 +93,6 @@ func (m Model) Init() tea.Cmd {
 }
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	var cmd tea.Cmd
-	var cmds []tea.Cmd
-
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.list.SetWidth(msg.Width)
@@ -94,54 +101,61 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tea.KeyMsg:
-		// Handle global keys first
-		switch msg.Type {
-		case tea.KeyCtrlC, tea.KeyEsc:
-			m.cancelled = true
-			return m, tea.Quit
-
-		case tea.KeyEnter:
-			if selectedItem := m.list.SelectedItem(); selectedItem != nil {
-				entry := selectedItem.(HistoryEntry)
-				m.selected = entry.Command
-				m.isNewCommand = false
-				return m, tea.Quit
-			}
-			// User typed a new command
-			m.selected = m.textInput.Value()
-			m.isNewCommand = true
-			return m, tea.Quit
-
-		case tea.KeyUp, tea.KeyCtrlK:
-			m.list.CursorUp()
-
-		case tea.KeyDown, tea.KeyCtrlJ:
-			m.list.CursorDown()
-		}
-
-		// Store the old value to detect changes
-		oldValue := m.textInput.Value()
-
-		// Update text input
-		m.textInput, cmd = m.textInput.Update(msg)
-		cmds = append(cmds, cmd)
-
-		// Check if the input value changed and update filtering
-		newValue := m.textInput.Value()
-		if newValue != oldValue {
-			m.filterItems(newValue)
-		}
+		return m.handleKey(msg)
 
 	case errMsg:
 		m.err = msg
 		return m, nil
 	}
 
-	return m, tea.Batch(cmds...)
+	return m, nil
+}
+
+func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch {
+	case key.Matches(msg, m.KeyMap.Cancel):
+		m.cancelled = true
+		return m, tea.Quit
+
+	case key.Matches(msg, m.KeyMap.Submit):
+		if selectedItem := m.list.SelectedItem(); selectedItem != nil {
+			entry := selectedItem.(HistoryEntry)
+			m.selected = entry.Command
+			m.isNewCommand = false
+			return m, tea.Quit
+		}
+		// User typed a new command
+		m.selected = m.textInput.Value()
+		m.isNewCommand = true
+		return m, tea.Quit
+
+	case key.Matches(msg, m.KeyMap.Up):
+		m.list.CursorUp()
+
+	case key.Matches(msg, m.KeyMap.Down):
+		m.list.CursorDown()
+	}
+
+	// Handle text input updates.
+	// Store the old value, update and compare for changes.
+	oldValue := m.textInput.Value()
+	var cmd tea.Cmd
+	m.textInput, cmd = m.textInput.Update(msg)
+	newValue := m.textInput.Value()
+	if newValue != oldValue {
+		m.filterItems(newValue)
+	}
+
+	return m, cmd
 }
 
 func (m *Model) filterItems(query string) {
-	m.list.SetFilterText(query)
+	if query == "" {
+		m.list.SetFilteringEnabled(false)
+	} else {
+		m.list.SetFilteringEnabled(true)
+		m.list.SetFilterText(query)
+	}
 }
 
 func (m Model) View() string {
@@ -156,12 +170,12 @@ func (m Model) View() string {
 	b.WriteString(m.list.View())
 	b.WriteString("\n")
 
+	// Show help text
+	b.WriteString(helpStyle.Render(m.help.View(m)))
+
 	// Always show the text input
 	b.WriteString(promptStyle.Render(m.textInput.View()))
 	b.WriteString("\n")
-
-	// Show help text
-	b.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("241")).Render("Enter: confirm • Esc: cancel"))
 
 	return b.String()
 }
@@ -171,6 +185,21 @@ func (m Model) Selected() (string, bool) {
 		return "", false
 	}
 	return m.selected, m.isNewCommand
+}
+
+func (m Model) ShortHelp() []key.Binding {
+	bindings := []key.Binding{
+		m.KeyMap.Submit,
+		m.KeyMap.Cancel,
+	}
+	if m.list.SelectedItem() != nil {
+		bindings = append(bindings, m.KeyMap.Up, m.KeyMap.Down)
+	}
+	return bindings
+}
+
+func (m Model) FullHelp() [][]key.Binding {
+	return [][]key.Binding{m.ShortHelp()}
 }
 
 func RunUI(history []HistoryEntry) (string, bool, error) {
