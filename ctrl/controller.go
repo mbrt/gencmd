@@ -49,12 +49,6 @@ func (c *Controller) LoadHistory() []HistoryEntry {
 	return entries
 }
 
-func (c *Controller) OutputCommand(command string) {
-	if command != "" {
-		fmt.Println(command)
-	}
-}
-
 func (c *Controller) UpdateHistory(prompt, command string) error {
 	if c.historyPath == "" {
 		return fmt.Errorf("history path is not set")

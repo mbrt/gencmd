@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 
@@ -11,6 +12,8 @@ import (
 
 	"github.com/mbrt/gencmd/ctrl"
 )
+
+var UserCancelErr = errors.New("user cancelled")
 
 var (
 	titleStyle  = lipgloss.NewStyle().Background(lipgloss.Color("62")).Foreground(lipgloss.Color("230")).Padding(0, 1)
@@ -36,7 +39,12 @@ func RunUI(c *ctrl.Controller) error {
 		return fmt.Errorf("running UI: %w", err)
 	}
 	finalModel := m.(Model)
-	c.OutputCommand(finalModel.selected)
+	if finalModel.err != nil {
+		return finalModel.err
+	}
+	if finalModel.selected != "" {
+		fmt.Println(finalModel.selected)
+	}
 	return nil
 }
 
@@ -173,9 +181,8 @@ func (m Model) updateModels(msg tea.Msg, onlyActive bool) (Model, tea.Cmd) {
 func (m Model) handleKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 	switch {
 	case key.Matches(msg, m.KeyMap.Cancel):
-		m.selected = ""
-		m.state = stateSelected
-		return m, tea.Quit
+		cmd := m.quitWithError(UserCancelErr)
+		return m, cmd
 
 	case key.Matches(msg, m.KeyMap.Submit):
 		switch m.state {
