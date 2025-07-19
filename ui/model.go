@@ -13,11 +13,10 @@ import (
 )
 
 var (
-	titleStyle        = lipgloss.NewStyle().Background(lipgloss.Color("62")).Foreground(lipgloss.Color("230")).Padding(0, 1)
-	itemStyle         = lipgloss.NewStyle().PaddingLeft(4)
-	selectedItemStyle = lipgloss.NewStyle().PaddingLeft(2).Foreground(lipgloss.Color("170"))
-	helpStyle         = lipgloss.NewStyle().PaddingTop(1).PaddingLeft(2)
-	promptStyle       = lipgloss.NewStyle().PaddingTop(1)
+	titleStyle  = lipgloss.NewStyle().Background(lipgloss.Color("62")).Foreground(lipgloss.Color("230")).Padding(0, 1)
+	itemStyle   = lipgloss.NewStyle().PaddingLeft(4)
+	helpStyle   = lipgloss.NewStyle().PaddingTop(1).PaddingLeft(2)
+	promptStyle = lipgloss.NewStyle().PaddingTop(1)
 )
 
 type state int
@@ -25,6 +24,7 @@ type state int
 const (
 	statePrompting state = iota
 	stateGenerating
+	stateSelecting
 	stateSelected
 )
 
@@ -46,8 +46,10 @@ type Model struct {
 	controller *ctrl.Controller
 	prompt     promptModel
 	wait       waitModel
+	selectCmp  selectModel
 	help       help.Model
 	state      state
+	promptText string
 	selected   string
 	err        error
 }
@@ -60,6 +62,7 @@ func New(c *ctrl.Controller) Model {
 		KeyMap:     km,
 		prompt:     newPromptModel(km, c.LoadHistory()),
 		wait:       newWaitModel(km),
+		selectCmp:  newSelectModel(km),
 		help:       h,
 		state:      statePrompting,
 	}
@@ -91,19 +94,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cmds = append(cmds, cmd)
 
 	case generateMsg:
-		if len(msg.Commands) == 0 {
-			m.err = fmt.Errorf("no commands generated")
-			return m, nil
-		}
-		m.controller.UpdateHistory(msg.Prompt, msg.Commands[0])
-		m.selected = msg.Commands[0]
-		m.state = stateSelected
-		return m, tea.Quit
+		cmd = m.handleCompletion(msg.Prompt, msg.Commands)
+		return m, cmd
 
 	case errMsg:
-		m.state = stateSelected
-		m.err = msg
-		return m, nil
+		cmd = m.quitWithError(msg)
+		return m, cmd
 
 	default:
 		m, cmd = m.updateModels(msg, false)
@@ -127,6 +123,8 @@ func (m Model) View() string {
 		b.WriteString(m.prompt.View())
 	case stateGenerating:
 		b.WriteString(m.wait.View())
+	case stateSelecting:
+		b.WriteString(m.selectCmp.View())
 	}
 
 	// Show help text
@@ -136,10 +134,15 @@ func (m Model) View() string {
 }
 
 func (m Model) ShortHelp() []key.Binding {
-	if m.state == stateGenerating {
-		return []key.Binding{m.KeyMap.Cancel}
-	} else {
+	switch m.state {
+	case statePrompting:
 		return m.prompt.ShortHelp()
+	case stateGenerating:
+		return m.wait.ShortHelp()
+	case stateSelecting:
+		return m.selectCmp.ShortHelp()
+	default:
+		return []key.Binding{m.KeyMap.Cancel}
 	}
 }
 
@@ -159,6 +162,11 @@ func (m Model) updateModels(msg tea.Msg, onlyActive bool) (Model, tea.Cmd) {
 		m.wait, cmd = m.wait.Update(msg)
 		cmds = append(cmds, cmd)
 	}
+	if !onlyActive || m.state == stateSelecting {
+		m.selectCmp, cmd = m.selectCmp.Update(msg)
+		cmds = append(cmds, cmd)
+	}
+
 	return m, tea.Batch(cmds...)
 }
 
@@ -170,15 +178,25 @@ func (m Model) handleKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 		return m, tea.Quit
 
 	case key.Matches(msg, m.KeyMap.Submit):
-		if m.state == statePrompting {
+		switch m.state {
+
+		case statePrompting:
+			// User submitted a prompt
 			selected := m.prompt.Selected()
 			if selected.IsNew() {
-				return m, m.runGenerate(selected.Prompt)
+				cmd := m.runGenerate(selected.Prompt)
+				return m, cmd
 			}
 			// User selected an existing command
 			m.selected = selected.Command
 			m.state = stateSelected
 			return m, tea.Quit
+
+		case stateSelecting:
+			// User selected a command from the list
+			selected := m.selectCmp.Selected()
+			cmd := m.selectCommand(m.promptText, selected)
+			return m, cmd
 		}
 	}
 
@@ -186,6 +204,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 }
 
 func (m *Model) runGenerate(prompt string) tea.Cmd {
+	m.promptText = prompt
 	m.state = stateGenerating
 	return func() tea.Msg {
 		cmds, err := m.controller.GenerateCommands(prompt)
@@ -194,6 +213,40 @@ func (m *Model) runGenerate(prompt string) tea.Cmd {
 		}
 		return generateMsg{Prompt: prompt, Commands: cmds}
 	}
+}
+
+func (m *Model) handleCompletion(prompt string, commands []string) tea.Cmd {
+	if len(commands) == 0 {
+		return m.quitWithError(fmt.Errorf("no commands generated"))
+	}
+
+	// If we have multiple commands, show a selection list
+	if len(commands) > 1 {
+		m.selectCmp.SetItems(commands)
+		m.state = stateSelecting
+		return nil
+	}
+
+	// If there's only one command, select it directly
+	return m.selectCommand(prompt, commands[0])
+}
+
+func (m *Model) selectCommand(prompt string, command string) tea.Cmd {
+	if command == "" {
+		return m.quitWithError(fmt.Errorf("no command selected"))
+	}
+	m.selected = command
+	m.controller.UpdateHistory(prompt, command)
+	m.state = stateSelected
+	return tea.Quit
+}
+
+func (m *Model) quitWithError(err error) tea.Cmd {
+	m.err = err
+	m.state = stateSelected
+	m.selected = ""
+	return tea.Quit
+
 }
 
 type errMsg error
