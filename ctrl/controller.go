@@ -11,7 +11,10 @@ import (
 	"google.golang.org/genai"
 )
 
-const model = "gemini-2.0-flash-lite"
+const (
+	model      = "gemini-2.0-flash-lite"
+	promptText = "You are a command line expert. Generate up to 5 shell command alternatives that implement the following description:\n"
+)
 
 func New() *Controller {
 	hpath, _ := xdg.DataFile("gencmd/history.jsonl")
@@ -82,12 +85,8 @@ func (c *Controller) GenerateCommands(prompt string) ([]string, error) {
 
 	content := []*genai.Content{
 		{
-			Parts: []*genai.Part{
-				{
-					Text: "You are a command line expert. Generate 5 shell command alternatives that implement the following description:\n" + prompt,
-				},
-			},
-			Role: genai.RoleUser,
+			Parts: []*genai.Part{{Text: promptText + prompt}},
+			Role:  genai.RoleUser,
 		},
 	}
 	config := &genai.GenerateContentConfig{

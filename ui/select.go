@@ -71,10 +71,10 @@ func (m selectModel) View() string {
 
 func (m selectModel) ShortHelp() []key.Binding {
 	return []key.Binding{
-		m.keyMap.Up,
-		m.keyMap.Down,
 		m.keyMap.Submit,
 		m.keyMap.Cancel,
+		m.keyMap.Up,
+		m.keyMap.Down,
 	}
 }
 
