@@ -1,0 +1,17 @@
+# Set environment variables used by gencmd
+#
+# This is useful for secrets, such as API keys, that should be stored separately
+# from the rest of the configuration.
+
+# Example for Google Gemini API key:
+# https://aistudio.google.com/apikey
+GEMINI_API_KEY=your_api_key_here
+
+# Example for Google Vertex AI:
+# https://cloud.google.com/vertex-ai/generative-ai/docs/start/api-keys
+# https://cloud.google.com/vertex-ai/generative-ai/docs/start/gcp-auth
+# Initialize with: (gcloud init; gcloud auth application-default login)
+#
+# GOOGLE_CLOUD_PROJECT=your_project_id  # e.g. my-project-123456
+# GOOGLE_CLOUD_LOCATION=your_region     # e.g. us-central1
+# GOOGLE_GENAI_USE_VERTEXAI=True
