@@ -3,12 +3,14 @@ package ui
 import (
 	"errors"
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/help"
 	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/muesli/termenv"
 
 	"github.com/mbrt/gencmd/ctrl"
 )
@@ -31,9 +33,26 @@ const (
 	stateSelected
 )
 
-func RunUI(c *ctrl.Controller) error {
-	p := tea.NewProgram(New(c), tea.WithAltScreen())
-	// TODO: Add a fallback for when we don't have a terminal
+// RunUI starts the gencmd UI with the provided controller and options.
+func RunUI(c *ctrl.Controller, opts Options) error {
+	teaOpts := []tea.ProgramOption{
+		tea.WithAltScreen(),
+	}
+
+	if opts.TtyPath != "" {
+		tty, err := os.OpenFile(opts.TtyPath, os.O_RDWR, 0)
+		if err != nil {
+			return fmt.Errorf("opening tty %q: %w", opts.TtyPath, err)
+		}
+		defer tty.Close()
+
+		profile := termenv.NewOutput(tty).EnvColorProfile()
+		lipgloss.SetColorProfile(profile)
+		teaOpts = append(teaOpts, tea.WithInput(tty), tea.WithOutput(tty))
+	}
+
+	p := tea.NewProgram(New(c), teaOpts...)
+
 	m, err := p.Run()
 	if err != nil {
 		return fmt.Errorf("running UI: %w", err)
@@ -46,6 +65,10 @@ func RunUI(c *ctrl.Controller) error {
 		fmt.Println(finalModel.selected)
 	}
 	return nil
+}
+
+type Options struct {
+	TtyPath string
 }
 
 type Model struct {

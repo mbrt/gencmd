@@ -46,6 +46,10 @@ func (c *Controller) LoadHistory() []HistoryEntry {
 		}
 		entries = append(entries, entry)
 	}
+	// Reverse the order to have the most recent entries first.
+	for i, j := 0, len(entries)-1; i < j; i, j = i+1, j-1 {
+		entries[i], entries[j] = entries[j], entries[i]
+	}
 	return entries
 }
 
