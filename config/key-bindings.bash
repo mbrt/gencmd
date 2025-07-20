@@ -8,4 +8,5 @@ _gencmd_bind() {
     READLINE_POINT=$(( READLINE_POINT + ${#selection} ))
 }
 
+# Bind the command to Ctrl+G
 bind -x '"\C-g": "_gencmd_bind"'

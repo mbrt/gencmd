@@ -5,7 +5,7 @@
 
 # Example for Google Gemini API key:
 # https://aistudio.google.com/apikey
-GEMINI_API_KEY=your_api_key_here
+# GEMINI_API_KEY=your_api_key_here
 
 # Example for Google Vertex AI:
 # https://cloud.google.com/vertex-ai/generative-ai/docs/start/api-keys

@@ -13,6 +13,7 @@ function gencmd-widget() {
     return "$ret"
 }
 
+# Bind the command to Ctrl+G
 zle     -N            gencmd-widget
 bindkey -M emacs '^G' gencmd-widget
 bindkey -M vicmd '^G' gencmd-widget
