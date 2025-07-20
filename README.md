@@ -1,13 +1,13 @@
 # gencmd
 
-gencmd is a simple interactive command line utility to generate bash commands
-with generative AI, directly from the console.
+gencmd is an interactive command line utility to generate bash commands from a
+natural language description, directly from the console.
 
-![demo](docs/demo.gif)
+[![asciicast](https://asciinema.org/a/QoGh9TXk3GMcyP4FmWyh2iUqH.svg)](https://asciinema.org/a/QoGh9TXk3GMcyP4FmWyh2iUqH)
 
 Ever went to ChatGPT after struggling some time with `man awk`, or with
-questions like "was it `curl` or `wget` with `-O`? Well, save some time and ask
-it directly from the terminal.
+questions like "was it `curl` or `wget` with `-O`"? Well, save some time and ask
+directly from the terminal.
 
 ## Installation
 
