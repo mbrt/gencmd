@@ -26,7 +26,7 @@ This tool generates shell commands based on natural language
 prompts by using a large language model (LLM). It depends on
 having access to a compatible LLM API, such as Google Gemini.`,
 	CompletionOptions: cobra.CompletionOptions{DisableDefaultCmd: true},
-	Run: func(cmd *cobra.Command, args []string) {
+	Run: func(*cobra.Command, []string) {
 		cfg, err := config.Load()
 		if err != nil {
 			fmt.Fprintf(os.Stderr, missingCfgMsg, err)
@@ -37,7 +37,7 @@ having access to a compatible LLM API, such as Google Gemini.`,
 		})
 		if err != nil {
 			// Do not print the error if the user cancelled the operation.
-			if !errors.Is(err, ui.UserCancelErr) {
+			if !errors.Is(err, ui.ErrUserCancel) {
 				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			}
 			os.Exit(1)

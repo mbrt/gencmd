@@ -81,7 +81,7 @@ func (f *FakeController) UpdateHistory(prompt, command string) error {
 	return nil
 }
 
-func (f *FakeController) GenerateCommands(prompt string) ([]string, error) {
+func (f *FakeController) GenerateCommands(string) ([]string, error) {
 	time.Sleep(2 * time.Second) // Simulate a delay
 	return f.commands, nil
 }
