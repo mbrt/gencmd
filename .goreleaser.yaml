@@ -26,6 +26,5 @@ archives:
       {{- if .Arm }}v{{ .Arm }}{{ end }}
 
 release:
-  use_existing_draft: true
-  make_latest: false
-  mode: keep-existing
+  disable: false
+  skip_upload: false
