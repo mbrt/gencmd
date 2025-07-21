@@ -1,0 +1,40 @@
+# This workflow is manually triggered.
+name: Create Release Tag
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version number (x.x.x)'
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  bump-version:
+    runs-on: ubuntu-latest
+    steps:
+
+    - uses: actions/checkout@v4
+
+    - name: Setup Git
+      run: |
+        git config user.name 'GitHub Actions'
+        git config user.email 'actions@github.com'
+
+    - name: Create and push tag
+      run: |
+        VERSION=${{ github.event.inputs.version }}
+        git tag -a "v${VERSION}" -m "Release version ${VERSION}."
+        git push origin main --follow-tags
+
+    - name: Create Release
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        VERSION=v${{ github.event.inputs.version }}
+        gh release create "${VERSION}" \
+          --draft \
+          --generate-notes \
+          --title "${VERSION}"
