@@ -224,9 +224,8 @@ func (m Model) handleKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 				return m, cmd
 			}
 			// User selected an existing command
-			m.selected = selected.Command
-			m.state = stateSelected
-			return m, tea.Quit
+			cmd := m.selectCommand(selected.Prompt, selected.Command)
+			return m, cmd
 
 		case stateSelecting:
 			// User selected a command from the list
