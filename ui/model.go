@@ -34,7 +34,7 @@ const (
 )
 
 // RunUI starts the gencmd UI with the provided controller and options.
-func RunUI(c *ctrl.Controller, opts Options) error {
+func RunUI(c Controller, opts Options) error {
 	teaOpts := []tea.ProgramOption{
 		tea.WithAltScreen(),
 	}
@@ -71,10 +71,16 @@ type Options struct {
 	TtyPath string
 }
 
+type Controller interface {
+	LoadHistory() []ctrl.HistoryEntry
+	UpdateHistory(prompt, command string) error
+	GenerateCommands(prompt string) ([]string, error)
+}
+
 type Model struct {
 	KeyMap KeyMap
 
-	controller *ctrl.Controller
+	controller Controller
 	prompt     promptModel
 	wait       waitModel
 	selectCmp  selectModel
@@ -85,7 +91,7 @@ type Model struct {
 	err        error
 }
 
-func New(c *ctrl.Controller) Model {
+func New(c Controller) Model {
 	km := DefaultKeyMap()
 	h := help.New()
 	return Model{

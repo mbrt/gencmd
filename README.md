@@ -52,6 +52,10 @@ paste the key into the `.env` file initialized in the step above.
 > to make sure to block requests over the free tier, use a dedicated GCP project
 > without billing enabled.
 
+> [!TIP]
+> If you just want to test how `gencmd` looks, without configuring it, you can
+> try the demo (returning fake history and commands) with `gencmd demo`.
+
 ## Usage
 
 Open a new terminal and press <kbd>Ctrl</kbd> + <kbd>G</kbd>. `gencmd` should pop
