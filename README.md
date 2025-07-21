@@ -53,7 +53,7 @@ paste the key into the `.env` file initialized in the step above.
 > without billing enabled.
 
 > [!TIP]
-> If you just want to test how `gencmd` looks, without configuring it, you can
+> If you just want to test how `gencmd` looks without configuring it, you can
 > try the demo (returning fake history and commands) with `gencmd demo`.
 
 ## Usage

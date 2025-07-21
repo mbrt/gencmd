@@ -3,10 +3,6 @@
 
 version: 2
 
-before:
-  hooks:
-    - go mod tidy
-
 builds:
   - goos:
       - linux
@@ -31,6 +27,5 @@ archives:
 
 release:
   use_existing_draft: true
-  prerelease: 'true'
   make_latest: false
   mode: keep-existing
