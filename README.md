@@ -1,5 +1,7 @@
 # gencmd
 
+[![Build](https://github.com/mbrt/gencmd/actions/workflows/build.yml/badge.svg)](https://github.com/mbrt/gencmd/actions/workflows/build.yml)
+
 gencmd is an interactive command line utility to generate bash commands from a
 natural language description, directly from the console.
 
