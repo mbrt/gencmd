@@ -25,26 +25,25 @@ func newPromptModel(km KeyMap, history []ctrl.HistoryEntry) promptModel {
 
 	// Create text input
 	ti := textinput.New()
-	if len(history) > 0 {
-		ti.Placeholder = "Search history or type a new prompt"
-	} else {
-		ti.Placeholder = "Type a prompt"
-	}
 	ti.Focus()
 	ti.CharLimit = 156
 	ti.Width = 80
 
-	return promptModel{
-		keyMap:    km,
-		list:      l,
-		textInput: ti,
+	res := promptModel{
+		keyMap:         km,
+		list:           l,
+		textInput:      ti,
+		historyVisible: true,
 	}
+	res.updateDefaultText()
+	return res
 }
 
 type promptModel struct {
-	keyMap    KeyMap
-	list      list.Model
-	textInput textinput.Model
+	keyMap         KeyMap
+	list           list.Model
+	textInput      textinput.Model
+	historyVisible bool
 }
 
 func (m promptModel) Init() tea.Cmd {
@@ -71,7 +70,7 @@ func (m promptModel) Update(msg tea.Msg) (promptModel, tea.Cmd) {
 func (m promptModel) View() string {
 	var b strings.Builder
 
-	if len(m.list.Items()) > 0 {
+	if len(m.list.Items()) > 0 && m.historyVisible {
 		b.WriteString(m.list.View())
 		b.WriteString("\n")
 	}
@@ -88,14 +87,15 @@ func (m promptModel) ShortHelp() []key.Binding {
 		m.keyMap.Submit,
 		m.keyMap.Cancel,
 	}
-	if m.list.SelectedItem() != nil {
+	if m.list.SelectedItem() != nil && m.historyVisible {
 		bindings = append(bindings, m.keyMap.Up, m.keyMap.Down)
 	}
+	bindings = append(bindings, m.keyMap.ToggleHistory)
 	return bindings
 }
 
 func (m promptModel) Selected() inputPrompt {
-	if selectedItem := m.list.SelectedItem(); selectedItem != nil {
+	if selectedItem := m.list.SelectedItem(); selectedItem != nil && m.historyVisible {
 		he := selectedItem.(historyEntry)
 		return inputPrompt{Prompt: he.Prompt, Command: he.Command}
 	}
@@ -111,6 +111,9 @@ func (m promptModel) handleKey(msg tea.KeyMsg) (promptModel, tea.Cmd) {
 	case key.Matches(msg, m.keyMap.Down):
 		m.list.CursorDown()
 		return m, nil
+	case key.Matches(msg, m.keyMap.ToggleHistory):
+		m.historyVisible = !m.historyVisible
+		m.updateDefaultText()
 	}
 	// Handle text input updates.
 	// Store the old value, update and compare for changes.
@@ -133,6 +136,14 @@ func (m *promptModel) filterItems(query string) {
 		m.list.SetFilteringEnabled(true)
 	}
 	m.list.SetFilterText(query)
+}
+
+func (m *promptModel) updateDefaultText() {
+	if len(m.list.Items()) > 0 && m.historyVisible {
+		m.textInput.Placeholder = "Search history or type a new prompt"
+	} else {
+		m.textInput.Placeholder = "Type a prompt"
+	}
 }
 
 type inputPrompt struct {

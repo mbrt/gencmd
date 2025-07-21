@@ -3,10 +3,11 @@ package ui
 import "github.com/charmbracelet/bubbles/key"
 
 type KeyMap struct {
-	Submit key.Binding
-	Cancel key.Binding
-	Up     key.Binding
-	Down   key.Binding
+	Submit        key.Binding
+	Cancel        key.Binding
+	Up            key.Binding
+	Down          key.Binding
+	ToggleHistory key.Binding
 }
 
 func DefaultKeyMap() KeyMap {
@@ -26,6 +27,10 @@ func DefaultKeyMap() KeyMap {
 		Down: key.NewBinding(
 			key.WithKeys("down", "ctrl+j"),
 			key.WithHelp("↓/ctrl+j", "down"),
+		),
+		ToggleHistory: key.NewBinding(
+			key.WithKeys("ctrl+h"),
+			key.WithHelp("ctrl+h", "toggle history"),
 		),
 	}
 }
