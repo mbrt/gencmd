@@ -1,0 +1,5 @@
+llm:
+  auto_from_env: true
+  prompt_template: |
+    You are a command line expert. Generate up to 5 shell command alternatives that implement the following description:
+    {{.UserInput}}

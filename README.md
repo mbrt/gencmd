@@ -31,6 +31,8 @@ source ~/.config/gencmd/key-bindings.bash
 
 or use `key-bindings.zsh` for `.zshrc`.
 
+## API Keys
+
 Initialize with:
 
 ```sh
@@ -43,6 +45,12 @@ to have API access to an AI model (such as Gemini).
 The easiest to get started is to get a free API key from [Google AI
 Studio](https://aistudio.google.com/apikey). Follow the instructions there and
 paste the key into the `.env` file initialized in the step above.
+
+> [!NOTE]
+> By default, `gencmd` uses "gemini-2.0-flash-lite", which has a generous free
+> tier of 200 requests per day. More than enough for typical usage. If you want
+> to make sure to block requests over the free tier, use a dedicated GCP project
+> without billing enabled.
 
 ## Usage
 

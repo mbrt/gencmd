@@ -7,11 +7,15 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/mbrt/gencmd/config"
 	"github.com/mbrt/gencmd/ctrl"
 	"github.com/mbrt/gencmd/ui"
 )
 
 var ttyPath string
+
+const missingCfgMsg = `WARNING: Error loading configuration: %v
+Please run "gencmd init" to create a default configuration.`
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
@@ -23,8 +27,12 @@ prompts by using a large language model (LLM). It depends on
 having access to a compatible LLM API, such as Google Gemini.`,
 	CompletionOptions: cobra.CompletionOptions{DisableDefaultCmd: true},
 	Run: func(cmd *cobra.Command, args []string) {
+		cfg, err := config.Load()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, missingCfgMsg, err)
+		}
 		// TODO: Add a fallback for when we don't have a terminal
-		err := ui.RunUI(ctrl.New(), ui.Options{
+		err = ui.RunUI(ctrl.New(cfg), ui.Options{
 			TtyPath: ttyPath,
 		})
 		if err != nil {
