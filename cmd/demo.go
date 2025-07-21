@@ -13,13 +13,13 @@ import (
 var demoCmd = &cobra.Command{
 	Use:   "demo",
 	Short: "Simulates the gencmd command, without requiring an LLM API",
-	Run: func(cmd *cobra.Command, args []string) {
+	Run: func(*cobra.Command, []string) {
 		err := ui.RunUI(ui.NewFakeController(), ui.Options{
 			TtyPath: ttyPath,
 		})
 		if err != nil {
 			// Do not print the error if the user cancelled the operation.
-			if !errors.Is(err, ui.UserCancelErr) {
+			if !errors.Is(err, ui.ErrUserCancel) {
 				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			}
 			os.Exit(1)

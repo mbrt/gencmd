@@ -24,7 +24,7 @@ var initCmd = &cobra.Command{
 
 This command is safe to run multiple times, as it will not
 overwrite existing configuration files.`,
-	RunE: func(cmd *cobra.Command, args []string) error {
+	RunE: func(cmd *cobra.Command, _ []string) error {
 		created, err := config.InitConfig()
 		if err != nil {
 			return err

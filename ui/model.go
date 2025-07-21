@@ -15,7 +15,7 @@ import (
 	"github.com/mbrt/gencmd/ctrl"
 )
 
-var UserCancelErr = errors.New("user cancelled")
+var ErrUserCancel = errors.New("user cancelled")
 
 var (
 	titleStyle  = lipgloss.NewStyle().Background(lipgloss.Color("62")).Foreground(lipgloss.Color("230")).Padding(0, 1)
@@ -210,7 +210,7 @@ func (m Model) updateModels(msg tea.Msg, onlyActive bool) (Model, tea.Cmd) {
 func (m Model) handleKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 	switch {
 	case key.Matches(msg, m.KeyMap.Cancel):
-		cmd := m.quitWithError(UserCancelErr)
+		cmd := m.quitWithError(ErrUserCancel)
 		return m, cmd
 
 	case key.Matches(msg, m.KeyMap.Submit):
