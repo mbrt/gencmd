@@ -97,7 +97,7 @@ func (m promptModel) ShortHelp() []key.Binding {
 func (m promptModel) Selected() inputPrompt {
 	if selectedItem := m.list.SelectedItem(); selectedItem != nil {
 		he := selectedItem.(historyEntry)
-		return inputPrompt{Command: he.Command}
+		return inputPrompt{Prompt: he.Prompt, Command: he.Command}
 	}
 	// User typed a new command
 	return inputPrompt{Prompt: m.textInput.Value()}

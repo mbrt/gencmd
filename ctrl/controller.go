@@ -48,7 +48,18 @@ func (c *Controller) LoadHistory() []HistoryEntry {
 	for i, j := 0, len(entries)-1; i < j; i, j = i+1, j-1 {
 		entries[i], entries[j] = entries[j], entries[i]
 	}
-	return entries
+
+	// Remove duplicates, keeping the most recent entry.
+	seen := make(map[HistoryEntry]bool)
+	var result []HistoryEntry
+	for _, entry := range entries {
+		if !seen[entry] {
+			result = append(result, entry)
+			seen[entry] = true
+		}
+	}
+
+	return result
 }
 
 func (c *Controller) UpdateHistory(prompt, command string) error {
