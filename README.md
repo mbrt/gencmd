@@ -41,12 +41,14 @@ Initialize with:
 gencmd init
 ```
 
-The instructions will point you to a `.env` file to edit, in order for `gencmd`
-to have API access to an AI model (such as Gemini).
+The instructions will guide you through setting up an AI model provider. The
+currently supported providers are OpenAI, Gemini and Anthropic.
 
 The easiest to get started is to get a free API key from [Google AI
 Studio](https://aistudio.google.com/apikey). Follow the instructions there and
-paste the key into the `.env` file initialized in the step above.
+once you have the key, paste it into the interactive prompt.
+
+Credentials are stored locally, and NEVER sent anywhere else.
 
 > [!NOTE]
 > By default, `gencmd` uses "gemini-2.0-flash-lite", which has a generous free

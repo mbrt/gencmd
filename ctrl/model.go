@@ -3,101 +3,122 @@ package ctrl
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
 	"os"
 	"text/template"
 
-	"google.golang.org/genai"
+	"github.com/firebase/genkit/go/ai"
+	"github.com/firebase/genkit/go/genkit"
+	"github.com/firebase/genkit/go/plugins/compat_oai/anthropic"
+	"github.com/firebase/genkit/go/plugins/compat_oai/openai"
+	"github.com/firebase/genkit/go/plugins/googlegenai"
+	"github.com/openai/openai-go/option"
 
 	"github.com/mbrt/gencmd/config"
 )
 
 func NewModel(ctx context.Context, cfg config.LLMConfig) (Model, error) {
-	if cfg.AutoFromEnv {
-		if hasOneOfEnvVars("GEMINI_API_KEY", "GOOGLE_API_KEY", "GOOGLE_GENAI_USE_VERTEXAI") {
-			cfg.Provider = "google"
-			if cfg.ModelName == "" {
-				cfg.ModelName = "gemini-2.0-flash-lite"
-			}
-		}
+	if cfg.PromptTemplate == "" {
+		return Model{}, fmt.Errorf("prompt template is required")
+	}
+	if cfg.ModelName == "" {
+		return Model{}, fmt.Errorf("model name is required")
 	}
 
 	switch cfg.Provider {
-	case "google":
+	case "googleai":
 		return newGeminiModel(ctx, cfg)
+	case "vertexai":
+		return newVertexAIModel(ctx, cfg)
+	case "openai":
+		return newOpenAIModel(ctx, cfg)
+	case "anthropic":
+		return newAnthropicModel(ctx, cfg)
 	default:
-		return nil, fmt.Errorf("unsupported model provider: %s", cfg.Provider)
+		return Model{}, fmt.Errorf("unsupported model provider: %s", cfg.Provider)
 	}
 }
 
-type Model interface {
-	GenerateCommands(ctx context.Context, prompt string) ([]string, error)
+// Model is the interface for generating commands based on a prompt.
+type Model struct {
+	client         *genkit.Genkit
+	promptTemplate string
 }
 
-func newGeminiModel(ctx context.Context, cfg config.LLMConfig) (Model, error) {
-	if cfg.ModelName == "" {
-		cfg.ModelName = "gemini-2.0-flash-lite"
-	}
-
-	client, err := genai.NewClient(ctx, &genai.ClientConfig{})
-	if err != nil {
-		return nil, fmt.Errorf("failed to create Gemini client: %w", err)
-	}
-
-	return &geminiModel{
-		client:    client,
-		modelName: cfg.ModelName,
-		template:  cfg.PromptTemplate,
-	}, nil
-}
-
-type geminiModel struct {
-	client    *genai.Client
-	modelName string
-	template  string
-}
-
-func (m geminiModel) GenerateCommands(ctx context.Context, prompt string) ([]string, error) {
-	text, err := templatePrompt(m.template, prompt)
+// GenerateCommands generates commands based on the provided prompt.
+func (m Model) GenerateCommands(ctx context.Context, prompt string) ([]string, error) {
+	text, err := templatePrompt(m.promptTemplate, prompt)
 	if err != nil {
 		return nil, fmt.Errorf("templating prompt: %w", err)
 	}
-	content := []*genai.Content{
-		{
-			Parts: []*genai.Part{{Text: text}},
-			Role:  genai.RoleUser,
-		},
-	}
-	config := &genai.GenerateContentConfig{
-		ResponseMIMEType: "application/json",
-		// See the OpenAPI specification for more details and examples:
-		//   https://spec.openapis.org/oas/v3.0.3.html#schema-object
-		ResponseSchema: &genai.Schema{
-			Type:  "array",
-			Items: &genai.Schema{Type: "string"},
-		},
-	}
-	res, err := m.client.Models.GenerateContent(ctx, m.modelName, content, config)
+	item, resp, err := genkit.GenerateData[[]string](ctx, m.client, ai.WithPrompt(text))
 	if err != nil {
-		return nil, fmt.Errorf("generating command: %w", err)
+		return nil, fmt.Errorf("generating commands: %w", err)
 	}
-	jsonResp := res.Text()
-	if jsonResp == "" {
+	if resp == nil || item == nil {
 		return nil, fmt.Errorf("no response from model")
 	}
-	var cmds []string
-	err = json.Unmarshal([]byte(jsonResp), &cmds)
-	return cmds, err
+	return *item, nil
 }
 
-func hasOneOfEnvVars(names ...string) bool {
-	for _, name := range names {
-		if _, exists := os.LookupEnv(name); exists {
-			return true
-		}
+func newGeminiModel(ctx context.Context, cfg config.LLMConfig) (Model, error) {
+	g, err := genkit.Init(ctx,
+		genkit.WithPlugins(&googlegenai.GoogleAI{}),
+		genkit.WithDefaultModel("googleai/"+cfg.ModelName),
+	)
+	if err != nil {
+		return Model{}, fmt.Errorf("initializing genkit: %w", err)
 	}
-	return false
+	return Model{
+		client:         g,
+		promptTemplate: cfg.PromptTemplate,
+	}, nil
+}
+
+func newVertexAIModel(ctx context.Context, cfg config.LLMConfig) (Model, error) {
+	g, err := genkit.Init(ctx,
+		genkit.WithPlugins(&googlegenai.VertexAI{}),
+		genkit.WithDefaultModel("vertexai/"+cfg.ModelName),
+	)
+	if err != nil {
+		return Model{}, fmt.Errorf("initializing genkit: %w", err)
+	}
+	return Model{
+		client:         g,
+		promptTemplate: cfg.PromptTemplate,
+	}, nil
+}
+
+func newOpenAIModel(ctx context.Context, cfg config.LLMConfig) (Model, error) {
+	g, err := genkit.Init(ctx,
+		genkit.WithPlugins(&openai.OpenAI{}),
+		genkit.WithDefaultModel("openai/"+cfg.ModelName),
+	)
+	if err != nil {
+		return Model{}, fmt.Errorf("initializing genkit: %w", err)
+	}
+	return Model{
+		client:         g,
+		promptTemplate: cfg.PromptTemplate,
+	}, nil
+}
+
+func newAnthropicModel(ctx context.Context, cfg config.LLMConfig) (Model, error) {
+	g, err := genkit.Init(ctx,
+		genkit.WithPlugins(&anthropic.Anthropic{
+			Opts: []option.RequestOption{
+				option.WithAPIKey(os.Getenv("ANTHROPIC_API_KEY")),
+			},
+		}),
+		genkit.WithDefaultModel("anthropic/"+cfg.ModelName),
+	)
+	if err != nil {
+		return Model{}, fmt.Errorf("initializing genkit: %w", err)
+	}
+	return Model{
+		client:         g,
+		promptTemplate: cfg.PromptTemplate,
+	}, nil
 }
 
 func templatePrompt(templateStr, prompt string) (string, error) {

@@ -1,4 +1,3 @@
 llm:
-  auto_from_env: false
-  model_name: gemini-2.5-flash
-  prompt_template: custom template
+  modelName: gemini-2.5-flash
+  promptTemplate: custom template

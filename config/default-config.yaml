@@ -1,5 +1,7 @@
 llm:
-  auto_from_env: true
-  prompt_template: |
-    You are a command line expert. Generate up to 5 shell command alternatives that implement the following description:
-    {{.UserInput}}
+  # The provider is auto-detected from environment variables, unless overridden below
+  # provider: googleai
+  # modelName: gemini-2.0-flash-lite
+  # promptTemplate: |
+  #   You are a command line expert. Generate up to 5 shell command alternatives that implement the following description:
+  #   {{.UserInput}}

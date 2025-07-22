@@ -2,6 +2,8 @@
 #
 # This is useful for secrets, such as API keys, that should be stored separately
 # from the rest of the configuration.
+# 
+# Uncomment and set the values related to the provider you want to use.
 
 # Example for Google Gemini API key:
 # https://aistudio.google.com/apikey
@@ -15,3 +17,11 @@
 # GOOGLE_CLOUD_PROJECT=your_project_id  # e.g. my-project-123456
 # GOOGLE_CLOUD_LOCATION=your_region     # e.g. us-central1
 # GOOGLE_GENAI_USE_VERTEXAI=True
+
+# Example for OpenAPI
+# https://platform.openai.com/api-keys
+# OPENAI_API_KEY=your_api_key_here
+
+# Example for Anthropic
+# https://console.anthropic.com/settings/keys
+# ANTHROPIC_API_KEY=your_api_key_here
