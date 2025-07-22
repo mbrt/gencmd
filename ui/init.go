@@ -102,7 +102,7 @@ func (m selectProviderModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m selectProviderModel) View() string {
-	return m.list.View()
+	return "\n" + m.list.View()
 }
 
 // providerItem wraps a config.ProviderDoc to implement the list.Item interface.

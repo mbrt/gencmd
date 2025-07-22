@@ -214,6 +214,16 @@ func Dir() string {
 	return filepath.Join(xdg.ConfigHome, "gencmd")
 }
 
+// ConfigPaths returns the paths to the configuration files.
+func ConfigPaths() []string {
+	var paths []string
+	dir := Dir()
+	for _, cfg := range defaultConfigs {
+		paths = append(paths, filepath.Join(dir, cfg.Name))
+	}
+	return paths
+}
+
 func configPath(name string) (string, error) {
 	// Return the full path to the config file.
 	return xdg.ConfigFile(filepath.Join("gencmd", name))

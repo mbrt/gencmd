@@ -8,10 +8,9 @@ import (
 	"github.com/spf13/cobra"
 )
 
-const initMessage = `
-To finish the setup, open the .env file and set the API key for
-your LLM here: %s/.env
+var reset bool
 
+const initMessage = `
 To enable key bindings, add the following line to your shell:
 source %s/key-bindings.bash 
 
@@ -36,22 +35,25 @@ overwrite existing configuration files.`,
 
 func init() {
 	rootCmd.AddCommand(initCmd)
+	initCmd.Flags().BoolVar(&reset, "reset", false, "Reconfigure the provider.")
 }
 
 func runInit(cmd *cobra.Command) error {
-	created, err := config.InitConfig()
+	if !reset {
+		// Determine whether the configuration already exists.
+		cfg, err := config.Load()
+		if err == nil && cfg.LLM.Provider != "" {
+			cmd.Println("gencmd is already initialized.")
+			printConfigPaths(cmd)
+			cmd.Println("\nYou can run `gencmd init --reset` to reconfigure the provider.")
+			return nil
+		}
+	}
+
+	_, err := config.InitConfig()
 	if err != nil {
 		return err
 	}
-	cmd.Println("Created config files:")
-	if len(created) == 0 {
-		cmd.Println(" - None: all files already exist.")
-	}
-	for _, path := range created {
-		cmd.Println(" -", path)
-	}
-	cfgDir := config.Dir()
-	cmd.Printf(initMessage, cfgDir, cfgDir, cfgDir)
 
 	// Initialize the llm providers.
 	providers := config.ProvidersInitOptions()
@@ -65,5 +67,15 @@ func runInit(cmd *cobra.Command) error {
 	}
 
 	cmd.Println("\nProvider configured successfully!")
+	printConfigPaths(cmd)
+	cmd.Printf(initMessage, config.Dir(), config.Dir())
+
 	return nil
+}
+
+func printConfigPaths(cmd *cobra.Command) {
+	cmd.Println("\nConfiguration files:")
+	for _, cfg := range config.ConfigPaths() {
+		cmd.Printf("- %s\n", cfg)
+	}
 }
