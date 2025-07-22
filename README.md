@@ -74,6 +74,7 @@ Examples for inspiration:
 
 * Find all subdirectories
 * Count the lines of a file that don't start with #
+* Delete a remote git tag
 
 ## Building from source
 
