@@ -81,3 +81,47 @@ func TestConfigLoad(t *testing.T) {
 		})
 	}
 }
+
+func TestSetUnsetOption(t *testing.T) {
+	t.Run("set new", func(t *testing.T) {
+		lines := []string{"FOO=bar"}
+		lines = setOption(lines, "BAZ", "qux")
+		assert.Equal(t, []string{"FOO=bar", `BAZ="qux"`}, lines)
+	})
+
+	t.Run("set existing", func(t *testing.T) {
+		lines := []string{"FOO=bar"}
+		lines = setOption(lines, "FOO", "qux")
+		assert.Equal(t, []string{`FOO="qux"`}, lines)
+	})
+
+	t.Run("set commented", func(t *testing.T) {
+		lines := []string{"# FOO=bar"}
+		lines = setOption(lines, "FOO", "qux")
+		assert.Equal(t, []string{`FOO="qux"`}, lines)
+	})
+
+	t.Run("set with spaces", func(t *testing.T) {
+		lines := []string{"  FOO = bar  "}
+		lines = setOption(lines, "FOO", "qux")
+		assert.Equal(t, []string{`FOO="qux"`}, lines)
+	})
+
+	t.Run("unset", func(t *testing.T) {
+		lines := []string{"FOO=bar", "BAZ=qux"}
+		lines = unsetOption(lines, "FOO")
+		assert.Equal(t, []string{"#FOO=bar", "BAZ=qux"}, lines)
+	})
+
+	t.Run("unset commented", func(t *testing.T) {
+		lines := []string{"# FOO=bar"}
+		lines = unsetOption(lines, "FOO")
+		assert.Equal(t, []string{"# FOO=bar"}, lines)
+	})
+
+	t.Run("unset non-existing", func(t *testing.T) {
+		lines := []string{"FOO=bar"}
+		lines = unsetOption(lines, "BAZ")
+		assert.Equal(t, []string{"FOO=bar"}, lines)
+	})
+}
