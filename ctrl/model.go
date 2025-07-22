@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"os"
 	"text/template"
 
 	"github.com/firebase/genkit/go/ai"
@@ -11,16 +12,17 @@ import (
 	"github.com/firebase/genkit/go/plugins/compat_oai/anthropic"
 	"github.com/firebase/genkit/go/plugins/compat_oai/openai"
 	"github.com/firebase/genkit/go/plugins/googlegenai"
+	"github.com/openai/openai-go/option"
 
 	"github.com/mbrt/gencmd/config"
 )
 
 func NewModel(ctx context.Context, cfg config.LLMConfig) (Model, error) {
 	if cfg.PromptTemplate == "" {
-		return nil, fmt.Errorf("prompt template is required")
+		return Model{}, fmt.Errorf("prompt template is required")
 	}
 	if cfg.ModelName == "" {
-		return nil, fmt.Errorf("model name is required")
+		return Model{}, fmt.Errorf("model name is required")
 	}
 
 	switch cfg.Provider {
@@ -33,76 +35,18 @@ func NewModel(ctx context.Context, cfg config.LLMConfig) (Model, error) {
 	case "anthropic":
 		return newAnthropicModel(ctx, cfg)
 	default:
-		return nil, fmt.Errorf("unsupported model provider: %s", cfg.Provider)
+		return Model{}, fmt.Errorf("unsupported model provider: %s", cfg.Provider)
 	}
 }
 
-type Model interface {
-	GenerateCommands(ctx context.Context, prompt string) ([]string, error)
-}
-
-func newGeminiModel(ctx context.Context, cfg config.LLMConfig) (Model, error) {
-	g, err := genkit.Init(ctx,
-		genkit.WithPlugins(&googlegenai.GoogleAI{}),
-		genkit.WithDefaultModel("googleai/"+cfg.ModelName),
-	)
-	if err != nil {
-		return nil, fmt.Errorf("initializing genkit: %w", err)
-	}
-	return &genkitModel{
-		client:         g,
-		promptTemplate: cfg.PromptTemplate,
-	}, nil
-}
-
-func newVertexAIModel(ctx context.Context, cfg config.LLMConfig) (Model, error) {
-	g, err := genkit.Init(ctx,
-		genkit.WithPlugins(&googlegenai.VertexAI{}),
-		genkit.WithDefaultModel("vertexai/"+cfg.ModelName),
-	)
-	if err != nil {
-		return nil, fmt.Errorf("initializing genkit: %w", err)
-	}
-	return &genkitModel{
-		client:         g,
-		promptTemplate: cfg.PromptTemplate,
-	}, nil
-}
-
-func newOpenAIModel(ctx context.Context, cfg config.LLMConfig) (Model, error) {
-	g, err := genkit.Init(ctx,
-		genkit.WithPlugins(&openai.OpenAI{}),
-		genkit.WithDefaultModel("openai/"+cfg.ModelName),
-	)
-	if err != nil {
-		return nil, fmt.Errorf("initializing genkit: %w", err)
-	}
-	return &genkitModel{
-		client:         g,
-		promptTemplate: cfg.PromptTemplate,
-	}, nil
-}
-
-func newAnthropicModel(ctx context.Context, cfg config.LLMConfig) (Model, error) {
-	g, err := genkit.Init(ctx,
-		genkit.WithPlugins(&anthropic.Anthropic{}),
-		genkit.WithDefaultModel("anthropic/"+cfg.ModelName),
-	)
-	if err != nil {
-		return nil, fmt.Errorf("initializing genkit: %w", err)
-	}
-	return &genkitModel{
-		client:         g,
-		promptTemplate: cfg.PromptTemplate,
-	}, nil
-}
-
-type genkitModel struct {
+// Model is the interface for generating commands based on a prompt.
+type Model struct {
 	client         *genkit.Genkit
 	promptTemplate string
 }
 
-func (m genkitModel) GenerateCommands(ctx context.Context, prompt string) ([]string, error) {
+// GenerateCommands generates commands based on the provided prompt.
+func (m Model) GenerateCommands(ctx context.Context, prompt string) ([]string, error) {
 	text, err := templatePrompt(m.promptTemplate, prompt)
 	if err != nil {
 		return nil, fmt.Errorf("templating prompt: %w", err)
@@ -115,6 +59,66 @@ func (m genkitModel) GenerateCommands(ctx context.Context, prompt string) ([]str
 		return nil, fmt.Errorf("no response from model")
 	}
 	return *item, nil
+}
+
+func newGeminiModel(ctx context.Context, cfg config.LLMConfig) (Model, error) {
+	g, err := genkit.Init(ctx,
+		genkit.WithPlugins(&googlegenai.GoogleAI{}),
+		genkit.WithDefaultModel("googleai/"+cfg.ModelName),
+	)
+	if err != nil {
+		return Model{}, fmt.Errorf("initializing genkit: %w", err)
+	}
+	return Model{
+		client:         g,
+		promptTemplate: cfg.PromptTemplate,
+	}, nil
+}
+
+func newVertexAIModel(ctx context.Context, cfg config.LLMConfig) (Model, error) {
+	g, err := genkit.Init(ctx,
+		genkit.WithPlugins(&googlegenai.VertexAI{}),
+		genkit.WithDefaultModel("vertexai/"+cfg.ModelName),
+	)
+	if err != nil {
+		return Model{}, fmt.Errorf("initializing genkit: %w", err)
+	}
+	return Model{
+		client:         g,
+		promptTemplate: cfg.PromptTemplate,
+	}, nil
+}
+
+func newOpenAIModel(ctx context.Context, cfg config.LLMConfig) (Model, error) {
+	g, err := genkit.Init(ctx,
+		genkit.WithPlugins(&openai.OpenAI{}),
+		genkit.WithDefaultModel("openai/"+cfg.ModelName),
+	)
+	if err != nil {
+		return Model{}, fmt.Errorf("initializing genkit: %w", err)
+	}
+	return Model{
+		client:         g,
+		promptTemplate: cfg.PromptTemplate,
+	}, nil
+}
+
+func newAnthropicModel(ctx context.Context, cfg config.LLMConfig) (Model, error) {
+	g, err := genkit.Init(ctx,
+		genkit.WithPlugins(&anthropic.Anthropic{
+			Opts: []option.RequestOption{
+				option.WithAPIKey(os.Getenv("ANTHROPIC_API_KEY")),
+			},
+		}),
+		genkit.WithDefaultModel("anthropic/"+cfg.ModelName),
+	)
+	if err != nil {
+		return Model{}, fmt.Errorf("initializing genkit: %w", err)
+	}
+	return Model{
+		client:         g,
+		promptTemplate: cfg.PromptTemplate,
+	}, nil
 }
 
 func templatePrompt(templateStr, prompt string) (string, error) {
