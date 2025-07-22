@@ -1,6 +1,7 @@
 # gencmd
 
 [![Build](https://github.com/mbrt/gencmd/actions/workflows/build.yml/badge.svg)](https://github.com/mbrt/gencmd/actions/workflows/build.yml)
+[![Go Report Card](https://goreportcard.com/badge/github.com/mbrt/gencmd)](https://goreportcard.com/report/github.com/mbrt/gencmd)
 
 gencmd is an interactive command line utility to generate bash commands from a
 natural language description, directly from the console.
@@ -9,7 +10,8 @@ natural language description, directly from the console.
 
 Ever went to ChatGPT after struggling some time with `man awk`, or with
 questions like "was it `curl` or `wget` with `-O`"? Well, save some time and ask
-directly from the terminal.
+directly from the terminal. Think of this as the
+[fzf](https://github.com/junegunn/fzf) for natural language to bash commands.
 
 ## Installation
 
