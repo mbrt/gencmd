@@ -4,6 +4,7 @@ import (
 	_ "embed"
 	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"strings"
@@ -74,18 +75,27 @@ func InitConfig() ([]string, error) {
 
 // SaveProviderEnv saves the environment variables for the LLM provider to the .env file.
 func SaveProviderEnv(name string, env map[string]string) error {
-	// Validation
 	var requiredOptions []ProviderOption
 	var unwantedOptions []string
 	for _, opts := range ProvidersInitOptions() {
-		if opts.Name == name {
+		if opts.ID == name {
 			requiredOptions = opts.Options
-		} else {
-			for _, opt := range opts.Options {
-				unwantedOptions = append(unwantedOptions, opt.EnvVar)
-			}
+			// If the provider has fixed environment variables, add them to the
+			// env map.
+			maps.Copy(env, opts.FixedEnv)
+			continue
+		}
+		// Remove any options that are not for the selected provider.
+		// This ensures that only the relevant options are set.
+		for _, opt := range opts.Options {
+			unwantedOptions = append(unwantedOptions, opt.EnvVar)
+		}
+		for k := range opts.FixedEnv {
+			unwantedOptions = append(unwantedOptions, k)
 		}
 	}
+
+	// Validation
 	if len(requiredOptions) == 0 {
 		return fmt.Errorf("unknown provider: %s", name)
 	}
@@ -126,8 +136,9 @@ func SaveProviderEnv(name string, env map[string]string) error {
 func ProvidersInitOptions() []ProviderDoc {
 	return []ProviderDoc{
 		{
-			Name:        "googleai",
-			Description: "Google Gemini AI (https://aistudio.google.com/apikey)",
+			ID:   "googleai",
+			Name: "Google Gemini AI",
+			URL:  "https://aistudio.google.com/apikey",
 			Options: []ProviderOption{
 				{
 					Name:        "Google Gemini API Key",
@@ -137,8 +148,9 @@ func ProvidersInitOptions() []ProviderDoc {
 			},
 		},
 		{
-			Name:        "vertexai",
-			Description: "Google Vertex AI (https://cloud.google.com/vertex-ai/generative-ai/docs/start/api-keys)",
+			ID:   "vertexai",
+			Name: "Google Vertex AI",
+			URL:  "https://cloud.google.com/vertex-ai/generative-ai/docs/start/api-keys",
 			Options: []ProviderOption{
 				{
 					Name:        "Google Cloud Project",
@@ -151,10 +163,14 @@ func ProvidersInitOptions() []ProviderDoc {
 					Description: "Region for Google Cloud services, e.g., us-central1",
 				},
 			},
+			FixedEnv: map[string]string{
+				"GOOGLE_GENAI_USE_VERTEXAI": "True",
+			},
 		},
 		{
-			Name:        "openai",
-			Description: "OpenAI (https://platform.openai.com/api-keys)",
+			ID:   "openai",
+			Name: "OpenAI",
+			URL:  "https://platform.openai.com/api-keys",
 			Options: []ProviderOption{
 				{
 					Name:        "OpenAI API Key",
@@ -164,8 +180,9 @@ func ProvidersInitOptions() []ProviderDoc {
 			},
 		},
 		{
-			Name:        "anthropic",
-			Description: "Anthropic (https://console.anthropic.com/settings/keys)",
+			ID:   "anthropic",
+			Name: "Anthropic",
+			URL:  "https://console.anthropic.com/settings/keys",
 			Options: []ProviderOption{
 				{
 					Name:        "Anthropic API Key",
@@ -178,9 +195,12 @@ func ProvidersInitOptions() []ProviderDoc {
 }
 
 type ProviderDoc struct {
-	Name        string
-	Description string
-	Options     []ProviderOption
+	ID      string
+	Name    string
+	URL     string
+	Options []ProviderOption
+	// Fixed environment variables for the provider
+	FixedEnv map[string]string
 }
 
 type ProviderOption struct {
