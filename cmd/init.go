@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"os"
 
 	"github.com/mbrt/gencmd/config"
 	"github.com/mbrt/gencmd/ui"
@@ -29,6 +30,7 @@ overwrite existing configuration files.`,
 	Run: func(cmd *cobra.Command, _ []string) {
 		if err := runInit(cmd); err != nil {
 			fmt.Fprintf(cmd.OutOrStderr(), "Error: %v\n", err)
+			os.Exit(1)
 		}
 	},
 }
