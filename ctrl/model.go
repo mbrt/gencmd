@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strings"
 	"text/template"
 
 	"github.com/firebase/genkit/go/ai"
@@ -12,6 +13,7 @@ import (
 	"github.com/firebase/genkit/go/plugins/compat_oai/anthropic"
 	"github.com/firebase/genkit/go/plugins/compat_oai/openai"
 	"github.com/firebase/genkit/go/plugins/googlegenai"
+	"github.com/firebase/genkit/go/plugins/vertexai/modelgarden"
 	"github.com/openai/openai-go/option"
 
 	"github.com/mbrt/gencmd/config"
@@ -76,8 +78,15 @@ func newGeminiModel(ctx context.Context, cfg config.LLMConfig) (Model, error) {
 }
 
 func newVertexAIModel(ctx context.Context, cfg config.LLMConfig) (Model, error) {
+	var plugin genkit.Plugin
+	if strings.HasPrefix(cfg.ModelName, "claude-") {
+		plugin = &modelgarden.Anthropic{}
+	} else {
+		plugin = &googlegenai.VertexAI{}
+	}
+
 	g, err := genkit.Init(ctx,
-		genkit.WithPlugins(&googlegenai.VertexAI{}),
+		genkit.WithPlugins(plugin),
 		genkit.WithDefaultModel("vertexai/"+cfg.ModelName),
 	)
 	if err != nil {
