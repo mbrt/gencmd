@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
+
 	"github.com/mbrt/gencmd/ctrl"
 )
 
@@ -95,7 +96,7 @@ func TestCompleteUIWorkflow(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Setup controller with test data
-			controller := &testController{
+			controller := &FakeController{
 				history:  tt.setupHistory,
 				commands: tt.commands,
 			}
@@ -133,7 +134,7 @@ func TestCompleteUIWorkflow(t *testing.T) {
 
 // TestUIStateTransitions tests that the UI transitions between states correctly
 func TestUIStateTransitions(t *testing.T) {
-	controller := &testController{
+	controller := &FakeController{
 		history:  []ctrl.HistoryEntry{{Prompt: "test", Command: "echo test"}},
 		commands: []string{"ls -l", "ls -la"},
 	}
@@ -193,10 +194,10 @@ func TestUIErrorHandling(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			controller := &testController{
-				history:       []ctrl.HistoryEntry{},
-				commands:      []string{},
-				generateError: tt.controllerErr,
+			controller := &FakeController{
+				history:     []ctrl.HistoryEntry{},
+				commands:    []string{},
+				generateErr: tt.controllerErr,
 			}
 
 			model := New(controller)
@@ -317,31 +318,6 @@ type workflowResult struct {
 	noError         bool
 	expectError     error
 	hasError        bool
-}
-
-type testController struct {
-	history       []ctrl.HistoryEntry
-	commands      []string
-	generateError error
-}
-
-func (tc *testController) LoadHistory() []ctrl.HistoryEntry {
-	return tc.history
-}
-
-func (tc *testController) UpdateHistory(prompt, command string) error {
-	tc.history = append(tc.history, ctrl.HistoryEntry{
-		Prompt:  prompt,
-		Command: command,
-	})
-	return nil
-}
-
-func (tc *testController) GenerateCommands(prompt string) ([]string, error) {
-	if tc.generateError != nil {
-		return nil, tc.generateError
-	}
-	return tc.commands, nil
 }
 
 func executeAction(t *testing.T, model Model, action userAction) Model {

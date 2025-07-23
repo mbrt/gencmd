@@ -61,12 +61,15 @@ func NewFakeController() *FakeController {
 			`find . -iname *.jpg`,
 			`find ./ -type f -iname "*.jpg"`,
 		},
+		generateDelay: 2 * time.Second,
 	}
 }
 
 type FakeController struct {
-	history  []ctrl.HistoryEntry
-	commands []string
+	history       []ctrl.HistoryEntry
+	commands      []string
+	generateDelay time.Duration
+	generateErr   error
 }
 
 func (f *FakeController) LoadHistory() []ctrl.HistoryEntry {
@@ -82,6 +85,6 @@ func (f *FakeController) UpdateHistory(prompt, command string) error {
 }
 
 func (f *FakeController) GenerateCommands(string) ([]string, error) {
-	time.Sleep(2 * time.Second) // Simulate a delay
-	return f.commands, nil
+	time.Sleep(f.generateDelay) // Simulate a delay
+	return f.commands, f.generateErr
 }
