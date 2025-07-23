@@ -13,6 +13,20 @@ questions like "was it `curl` or `wget` with `-O`"? Well, save some time and ask
 directly from the terminal. Think of this as the
 [fzf](https://github.com/junegunn/fzf) for natural language to bash commands.
 
+## Why?
+
+There are many alternative tools for this task, but none did all I wanted:
+
+* Simple to install and configure (i.e. single binary, no dependencies).
+* Work interactively in the terminal, but require minimal typing.
+* Fast.
+* *Do not* run commands for me, but suggest alternatives.
+* Paste the result directly in the terminal (without me having to do it).
+* Have built-in history for both commands and prompts.
+* Open source, no sign-up required, no strings attached.
+
+This project is minimal but provides all of the above.
+
 ## Installation
 
 Head over to the
@@ -64,13 +78,20 @@ Credentials are stored locally, and NEVER sent anywhere else.
 
 ## Usage
 
-Open a new terminal and press <kbd>Ctrl</kbd> + <kbd>G</kbd>. `gencmd` should pop
-up and ask you for a prompt. This is forwarded to the LLM which will generate a
-few alternative commands that should solve your intended usage.
+Think of this as [fzf](https://github.com/junegunn/fzf) for natural language to
+bash commands. Open a new terminal and press <kbd>Ctrl</kbd> + <kbd>G</kbd>.
+As you type your query, `gencmd` will filter your recent history, so you can
+either select something from there, or submit a new prompt.
+
+In case the prompt is new, your configured LLM will be invoked to generate a few
+alternative commands to solve your intended usage.
 
 You can navigate history and completions with keyboard arrows <kbd>↑</kbd>
 <kbd>↓</kbd>, or <kbd>Ctrl</kbd> + <kbd>J</kbd> and <kbd>Ctrl</kbd> +
 <kbd>K</kbd>.
+
+The result is *not executed*, but pasted into your command line, so that you
+can edit it.
 
 Examples for inspiration:
 
