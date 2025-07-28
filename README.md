@@ -58,11 +58,14 @@ gencmd init
 ```
 
 The instructions will guide you through setting up an AI model provider. The
-currently supported providers are OpenAI, Gemini and Anthropic.
+currently supported providers are OpenAI, Gemini, Anthropic, and Ollama.
 
 The easiest to get started is to get a free API key from [Google AI
 Studio](https://aistudio.google.com/apikey). Follow the instructions there and
 once you have the key, paste it into the interactive prompt.
+
+For local models, you can use [Ollama](https://ollama.ai). First install Ollama
+and pull a model (e.g., `ollama pull gemma-3`), then configure gencmd to use it.
 
 Credentials are stored locally, and NEVER sent anywhere else.
 

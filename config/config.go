@@ -63,6 +63,8 @@ func DefaultFromEnv() Config {
 		cfg.LLM.Provider = "openai"
 	} else if _, ok := os.LookupEnv("ANTHROPIC_API_KEY"); ok {
 		cfg.LLM.Provider = "anthropic"
+	} else if _, ok := os.LookupEnv("OLLAMA_HOST"); ok {
+		cfg.LLM.Provider = "ollama"
 	}
 
 	// Model name
@@ -73,6 +75,8 @@ func DefaultFromEnv() Config {
 		cfg.LLM.ModelName = "gpt-4o-mini"
 	case "anthropic":
 		cfg.LLM.ModelName = "claude-3-5-haiku-latest"
+	case "ollama":
+		cfg.LLM.ModelName = "gemma-3"
 	}
 
 	return cfg

@@ -6,6 +6,7 @@ import (
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
+
 	"github.com/mbrt/gencmd/config"
 )
 
@@ -63,7 +64,7 @@ func newSelectProviderModel(providers []config.ProviderDoc) selectProviderModel 
 	for i, p := range providers {
 		items[i] = providerItem{p}
 	}
-	l := list.New(items, list.NewDefaultDelegate(), 80, 15)
+	l := list.New(items, list.NewDefaultDelegate(), 80, 18)
 	l.Title = "Select a provider"
 	l.SetShowStatusBar(false)
 	l.SetShowHelp(false)
