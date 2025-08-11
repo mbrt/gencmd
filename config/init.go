@@ -191,6 +191,18 @@ func ProvidersInitOptions() []ProviderDoc {
 				},
 			},
 		},
+		{
+			ID:   "ollama",
+			Name: "Ollama",
+			URL:  "https://ollama.com/docs/installation",
+			Options: []ProviderOption{
+				{
+					Name:        "Ollama Host",
+					EnvVar:      "OLLAMA_HOST",
+					Description: "Host address for Ollama server, e.g., http://localhost:11434",
+				},
+			},
+		},
 	}
 }
 

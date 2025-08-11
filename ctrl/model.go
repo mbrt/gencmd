@@ -13,6 +13,7 @@ import (
 	"github.com/firebase/genkit/go/plugins/compat_oai/anthropic"
 	"github.com/firebase/genkit/go/plugins/compat_oai/openai"
 	"github.com/firebase/genkit/go/plugins/googlegenai"
+	"github.com/firebase/genkit/go/plugins/ollama"
 	"github.com/firebase/genkit/go/plugins/vertexai/modelgarden"
 	"github.com/openai/openai-go/option"
 
@@ -36,6 +37,8 @@ func NewModel(ctx context.Context, cfg config.LLMConfig) (Model, error) {
 		return newOpenAIModel(ctx, cfg)
 	case "anthropic":
 		return newAnthropicModel(ctx, cfg)
+	case "ollama":
+		return newOllamaModel(ctx, cfg)
 	default:
 		return Model{}, fmt.Errorf("unsupported model provider: %s", cfg.Provider)
 	}
@@ -44,6 +47,7 @@ func NewModel(ctx context.Context, cfg config.LLMConfig) (Model, error) {
 // Model is the interface for generating commands based on a prompt.
 type Model struct {
 	client         *genkit.Genkit
+	model          ai.Model
 	promptTemplate string
 }
 
@@ -53,7 +57,14 @@ func (m Model) GenerateCommands(ctx context.Context, prompt string) ([]string, e
 	if err != nil {
 		return nil, fmt.Errorf("templating prompt: %w", err)
 	}
-	item, resp, err := genkit.GenerateData[[]string](ctx, m.client, ai.WithPrompt(text))
+	opts := []ai.GenerateOption{
+		ai.WithPrompt(text),
+	}
+	if m.model != nil {
+		opts = append(opts, ai.WithModel(m.model))
+	}
+
+	item, resp, err := genkit.GenerateData[[]string](ctx, m.client, opts...)
 	if err != nil {
 		return nil, fmt.Errorf("generating commands: %w", err)
 	}
@@ -126,6 +137,42 @@ func newAnthropicModel(ctx context.Context, cfg config.LLMConfig) (Model, error)
 	}
 	return Model{
 		client:         g,
+		promptTemplate: cfg.PromptTemplate,
+	}, nil
+}
+
+func newOllamaModel(ctx context.Context, cfg config.LLMConfig) (Model, error) {
+	host := "http://localhost:11434"
+	if h, ok := os.LookupEnv("OLLAMA_HOST"); ok {
+		host = h
+	}
+	plugin := &ollama.Ollama{
+		ServerAddress: host,
+	}
+	g, err := genkit.Init(ctx,
+		genkit.WithPlugins(plugin),
+	)
+	if err != nil {
+		return Model{}, fmt.Errorf("initializing genkit: %w", err)
+	}
+
+	model := plugin.DefineModel(g,
+		ollama.ModelDefinition{
+			Name: cfg.ModelName,
+			Type: "chat",
+		},
+		&ai.ModelInfo{
+			Supports: &ai.ModelSupports{
+				Multiturn:  true,
+				SystemRole: true,
+				Tools:      false,
+				Media:      false,
+			},
+		},
+	)
+	return Model{
+		client:         g,
+		model:          model,
 		promptTemplate: cfg.PromptTemplate,
 	}, nil
 }
