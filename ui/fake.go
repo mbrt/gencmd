@@ -84,6 +84,18 @@ func (f *FakeController) UpdateHistory(prompt, command string) error {
 	return nil
 }
 
+func (f *FakeController) DeleteHistory(entry ctrl.HistoryEntry) error {
+	// Find and remove the entry from history
+	for i, histEntry := range f.history {
+		if histEntry == entry {
+			// Remove the entry by slicing around it
+			f.history = append(f.history[:i], f.history[i+1:]...)
+			break
+		}
+	}
+	return nil
+}
+
 func (f *FakeController) GenerateCommands(string) ([]string, error) {
 	time.Sleep(f.generateDelay) // Simulate a delay
 	return f.commands, f.generateErr

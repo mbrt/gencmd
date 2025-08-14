@@ -74,6 +74,7 @@ type Options struct {
 type Controller interface {
 	LoadHistory() []ctrl.HistoryEntry
 	UpdateHistory(prompt, command string) error
+	DeleteHistory(entry ctrl.HistoryEntry) error
 	GenerateCommands(prompt string) ([]string, error)
 }
 
@@ -134,6 +135,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cmd = m.handleCompletion(msg.Prompt, msg.Commands)
 		return m, cmd
 
+	case deleteHistoryMsg:
+		cmd = m.handleDeleteHistory(msg.Entry)
+		return m, cmd
+
 	case errMsg:
 		cmd = m.quitWithError(msg)
 		return m, cmd
@@ -184,7 +189,14 @@ func (m Model) ShortHelp() []key.Binding {
 }
 
 func (m Model) FullHelp() [][]key.Binding {
-	return [][]key.Binding{m.ShortHelp()}
+	bindings := m.ShortHelp()
+
+	// Add DeleteHistory binding in full help when in prompting state
+	if m.state == statePrompting {
+		bindings = append(bindings, m.KeyMap.DeleteHistory)
+	}
+
+	return [][]key.Binding{bindings}
 }
 
 func (m Model) updateModels(msg tea.Msg, onlyActive bool) (Model, tea.Cmd) {
@@ -276,6 +288,16 @@ func (m *Model) selectCommand(prompt string, command string) tea.Cmd {
 	return tea.Quit
 }
 
+func (m *Model) handleDeleteHistory(entry ctrl.HistoryEntry) tea.Cmd {
+	return func() tea.Msg {
+		err := m.controller.DeleteHistory(entry)
+		if err != nil {
+			return errMsg(err)
+		}
+		return nil
+	}
+}
+
 func (m *Model) quitWithError(err error) tea.Cmd {
 	m.err = err
 	m.state = stateSelected
@@ -289,4 +311,8 @@ type errMsg error
 type generateMsg struct {
 	Prompt   string
 	Commands []string
+}
+
+type deleteHistoryMsg struct {
+	Entry ctrl.HistoryEntry
 }

@@ -114,6 +114,8 @@ func (m promptModel) handleKey(msg tea.KeyMsg) (promptModel, tea.Cmd) {
 	case key.Matches(msg, m.keyMap.ToggleHistory):
 		m.historyVisible = !m.historyVisible
 		m.updateDefaultText()
+	case key.Matches(msg, m.keyMap.DeleteHistory):
+		return m.handleDeleteHistory()
 	}
 	// Handle text input updates.
 	// Store the old value, update and compare for changes.
@@ -175,4 +177,44 @@ func (h historyEntry) Title() string {
 
 func (h historyEntry) Description() string {
 	return h.Command
+}
+
+func (m promptModel) handleDeleteHistory() (promptModel, tea.Cmd) {
+	// Only allow deletion if history is visible and an item is selected
+	if !m.historyVisible || len(m.list.Items()) == 0 {
+		return m, nil
+	}
+
+	selectedItem := m.list.SelectedItem()
+	if selectedItem == nil {
+		return m, nil
+	}
+
+	// Get the selected history entry
+	he := selectedItem.(historyEntry)
+
+	// Remove the item from the list
+	items := m.list.Items()
+	selectedIndex := m.list.Index()
+
+	// Create new items slice without the selected item
+	newItems := make([]list.Item, 0, len(items)-1)
+	for i, item := range items {
+		if i != selectedIndex {
+			newItems = append(newItems, item)
+		}
+	}
+
+	// Update the list with new items
+	m.list.SetItems(newItems)
+
+	// Adjust cursor position if necessary
+	if selectedIndex >= len(newItems) && len(newItems) > 0 {
+		m.list.Select(len(newItems) - 1)
+	}
+
+	// Send a command to delete from the controller
+	return m, func() tea.Msg {
+		return deleteHistoryMsg{Entry: he.HistoryEntry}
+	}
 }

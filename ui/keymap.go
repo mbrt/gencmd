@@ -8,6 +8,7 @@ type KeyMap struct {
 	Up            key.Binding
 	Down          key.Binding
 	ToggleHistory key.Binding
+	DeleteHistory key.Binding
 }
 
 func DefaultKeyMap() KeyMap {
@@ -31,6 +32,10 @@ func DefaultKeyMap() KeyMap {
 		ToggleHistory: key.NewBinding(
 			key.WithKeys("ctrl+h"),
 			key.WithHelp("ctrl+h", "toggle history"),
+		),
+		DeleteHistory: key.NewBinding(
+			key.WithKeys("ctrl+d"),
+			key.WithHelp("ctrl+d", "delete history item"),
 		),
 	}
 }

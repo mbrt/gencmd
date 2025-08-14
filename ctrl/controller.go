@@ -14,15 +14,18 @@ import (
 
 func New(cfg config.Config) *Controller {
 	hpath, _ := xdg.DataFile("gencmd/history.jsonl")
+	rpath, _ := xdg.DataFile("gencmd/rejected.jsonl")
 	return &Controller{
-		historyPath: hpath,
-		cfg:         cfg,
+		historyPath:  hpath,
+		rejectedPath: rpath,
+		cfg:          cfg,
 	}
 }
 
 type Controller struct {
-	historyPath string
-	cfg         config.Config
+	historyPath  string
+	rejectedPath string
+	cfg          config.Config
 }
 
 func (c *Controller) LoadHistory() []HistoryEntry {
@@ -80,6 +83,77 @@ func (c *Controller) UpdateHistory(prompt, command string) error {
 	if _, err := file.WriteString(string(data) + "\n"); err != nil {
 		return fmt.Errorf("writing to history file: %w", err)
 	}
+	return nil
+}
+
+func (c *Controller) DeleteHistory(entry HistoryEntry) error {
+	if c.historyPath == "" {
+		return fmt.Errorf("history path is not set")
+	}
+	if c.rejectedPath == "" {
+		return fmt.Errorf("rejected path is not set")
+	}
+
+	// First, log the deleted entry to rejected.jsonl
+	rejectedFile, err := os.OpenFile(c.rejectedPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
+	if err != nil {
+		return fmt.Errorf("opening rejected file: %w", err)
+	}
+	defer rejectedFile.Close()
+
+	rejectedData, err := json.Marshal(entry)
+	if err != nil {
+		return fmt.Errorf("marshalling rejected entry: %w", err)
+	}
+	if _, err := rejectedFile.WriteString(string(rejectedData) + "\n"); err != nil {
+		return fmt.Errorf("writing to rejected file: %w", err)
+	}
+
+	// Read current history (if file exists)
+	historyFile, err := os.Open(c.historyPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			// History file doesn't exist, nothing to delete from
+			// Still log to rejected file though
+			return nil
+		}
+		return fmt.Errorf("opening history file for reading: %w", err)
+	}
+	defer historyFile.Close()
+
+	var entries []HistoryEntry
+	scanner := bufio.NewScanner(historyFile)
+	for scanner.Scan() {
+		var histEntry HistoryEntry
+		if err := json.Unmarshal(scanner.Bytes(), &histEntry); err != nil {
+			continue // Skip malformed entries
+		}
+		// Keep entries that don't match the one to delete
+		if histEntry != entry {
+			entries = append(entries, histEntry)
+		}
+	}
+	if err := scanner.Err(); err != nil {
+		return fmt.Errorf("reading history file: %w", err)
+	}
+
+	// Rewrite history file without the deleted entry
+	newHistoryFile, err := os.OpenFile(c.historyPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600)
+	if err != nil {
+		return fmt.Errorf("opening history file for writing: %w", err)
+	}
+	defer newHistoryFile.Close()
+
+	for _, histEntry := range entries {
+		data, err := json.Marshal(histEntry)
+		if err != nil {
+			return fmt.Errorf("marshalling history entry: %w", err)
+		}
+		if _, err := newHistoryFile.WriteString(string(data) + "\n"); err != nil {
+			return fmt.Errorf("writing to history file: %w", err)
+		}
+	}
+
 	return nil
 }
 
