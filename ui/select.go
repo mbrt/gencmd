@@ -78,6 +78,10 @@ func (m selectModel) ShortHelp() []key.Binding {
 	}
 }
 
+func (m selectModel) FullHelp() [][]key.Binding {
+	return [][]key.Binding{m.ShortHelp()}
+}
+
 func (m *selectModel) SetItems(items []string) {
 	listItems := make([]list.Item, len(items))
 	for i, item := range items {

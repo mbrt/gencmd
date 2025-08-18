@@ -180,14 +180,16 @@ func (m Model) ShortHelp() []key.Binding {
 }
 
 func (m Model) FullHelp() [][]key.Binding {
-	bindings := m.ShortHelp()
-
-	// Add DeleteHistory binding in full help when in prompting state
-	if m.state == statePrompting {
-		bindings = append(bindings, m.KeyMap.DeleteHistory)
+	switch m.state {
+	case statePrompting:
+		return m.prompt.FullHelp()
+	case stateGenerating:
+		return m.wait.FullHelp()
+	case stateSelecting:
+		return m.selectCmp.FullHelp()
+	default:
+		return [][]key.Binding{{m.KeyMap.Cancel}}
 	}
-
-	return [][]key.Binding{bindings}
 }
 
 func (m *Model) updateModels(msg tea.Msg, onlyActive bool) tea.Cmd {
@@ -234,6 +236,9 @@ func (m *Model) handleKey(msg tea.KeyMsg) tea.Cmd {
 			selected := m.selectCmp.Selected()
 			return m.selectCommand(m.promptText, selected)
 		}
+
+	case key.Matches(msg, m.KeyMap.ToggleHelp):
+		m.help.ShowAll = !m.help.ShowAll
 	}
 
 	return nil

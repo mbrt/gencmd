@@ -49,3 +49,7 @@ func (m waitModel) View() string {
 func (m waitModel) ShortHelp() []key.Binding {
 	return []key.Binding{m.keyMap.Cancel}
 }
+
+func (m waitModel) FullHelp() [][]key.Binding {
+	return [][]key.Binding{m.ShortHelp()}
+}

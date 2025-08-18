@@ -90,15 +90,30 @@ func (m promptModel) View() string {
 func (m promptModel) ShortHelp() []key.Binding {
 	bindings := []key.Binding{
 		m.keyMap.Submit,
-		m.keyMap.Cancel,
 	}
 	if m.list.SelectedItem() != nil && m.historyVisible {
 		bindings = append(bindings, m.keyMap.Up, m.keyMap.Down)
 	}
-	if len(m.list.Items()) > 0 {
-		bindings = append(bindings, m.keyMap.ToggleHistory)
-	}
+	bindings = append(bindings, m.keyMap.ToggleHelp)
 	return bindings
+}
+
+func (m promptModel) FullHelp() [][]key.Binding {
+	return [][]key.Binding{
+		{
+			m.keyMap.Submit,
+			m.keyMap.Cancel,
+		},
+		{
+			m.keyMap.Up,
+			m.keyMap.Down,
+		},
+		{
+			m.keyMap.DeleteHistory,
+			m.keyMap.ToggleHistory,
+			m.keyMap.ToggleHelp,
+		},
+	}
 }
 
 func (m promptModel) Selected() inputPrompt {
@@ -121,6 +136,7 @@ func (m *promptModel) handleKey(msg tea.KeyMsg) tea.Cmd {
 	case key.Matches(msg, m.keyMap.ToggleHistory):
 		m.historyVisible = !m.historyVisible
 		m.updateDefaultText()
+		return nil
 	case key.Matches(msg, m.keyMap.DeleteHistory):
 		return m.handleDeleteHistory()
 	}
