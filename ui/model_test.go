@@ -331,13 +331,21 @@ func typeTextIntoModel(model Model, text string) Model {
 }
 
 func updateModel(m Model, msg tea.Msg) Model {
+	if msg == nil || msg == tea.Quit() {
+		return m
+	}
+	// Handle batch messages
+	if msg, ok := msg.(tea.BatchMsg); ok {
+		for _, cmd := range msg {
+			m = updateModel(m, cmd())
+		}
+		return m
+	}
+	// Update the model
 	um, cmd := m.Update(msg)
 	m = um.(Model)
 	if cmd == nil {
 		return m
 	}
-	if res := cmd(); res != nil && res != tea.Quit() {
-		return updateModel(m, res)
-	}
-	return m
+	return updateModel(m, cmd())
 }

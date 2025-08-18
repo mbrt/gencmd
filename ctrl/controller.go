@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
+	"slices"
 
 	"github.com/adrg/xdg"
 
@@ -29,29 +31,12 @@ type Controller struct {
 }
 
 func (c *Controller) LoadHistory() []HistoryEntry {
-	if c.historyPath == "" {
-		return nil
-	}
-	file, err := os.Open(c.historyPath)
-	if err != nil {
-		return nil
-	}
-	defer file.Close()
+	entries := c.loadHistoryRaw()
 
-	var entries []HistoryEntry
-	scanner := bufio.NewScanner(file)
-	for scanner.Scan() {
-		var entry HistoryEntry
-		if err := json.Unmarshal(scanner.Bytes(), &entry); err != nil {
-			continue // Skip malformed entries
-		}
-		entries = append(entries, entry)
-	}
 	// Reverse the order to have the most recent entries first.
 	for i, j := 0, len(entries)-1; i < j; i, j = i+1, j-1 {
 		entries[i], entries[j] = entries[j], entries[i]
 	}
-
 	// Remove duplicates, keeping the most recent entry.
 	seen := make(map[HistoryEntry]bool)
 	var result []HistoryEntry
@@ -87,74 +72,28 @@ func (c *Controller) UpdateHistory(prompt, command string) error {
 }
 
 func (c *Controller) DeleteHistory(entry HistoryEntry) error {
-	if c.historyPath == "" {
-		return fmt.Errorf("history path is not set")
-	}
-	if c.rejectedPath == "" {
-		return fmt.Errorf("rejected path is not set")
+	if c.historyPath == "" || c.rejectedPath == "" {
+		return fmt.Errorf("history or rejected paths not set")
 	}
 
 	// First, log the deleted entry to rejected.jsonl
-	rejectedFile, err := os.OpenFile(c.rejectedPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
-	if err != nil {
-		return fmt.Errorf("opening rejected file: %w", err)
-	}
-	defer rejectedFile.Close()
-
-	rejectedData, err := json.Marshal(entry)
-	if err != nil {
-		return fmt.Errorf("marshalling rejected entry: %w", err)
-	}
-	if _, err := rejectedFile.WriteString(string(rejectedData) + "\n"); err != nil {
-		return fmt.Errorf("writing to rejected file: %w", err)
+	if err := c.logRejected(entry); err != nil {
+		return fmt.Errorf("logging rejected entry: %w", err)
 	}
 
 	// Read current history (if file exists)
-	historyFile, err := os.Open(c.historyPath)
-	if err != nil {
-		if os.IsNotExist(err) {
-			// History file doesn't exist, nothing to delete from
-			// Still log to rejected file though
-			return nil
-		}
-		return fmt.Errorf("opening history file for reading: %w", err)
-	}
-	defer historyFile.Close()
-
-	var entries []HistoryEntry
-	scanner := bufio.NewScanner(historyFile)
-	for scanner.Scan() {
-		var histEntry HistoryEntry
-		if err := json.Unmarshal(scanner.Bytes(), &histEntry); err != nil {
-			continue // Skip malformed entries
-		}
-		// Keep entries that don't match the one to delete
-		if histEntry != entry {
-			entries = append(entries, histEntry)
-		}
-	}
-	if err := scanner.Err(); err != nil {
-		return fmt.Errorf("reading history file: %w", err)
+	entries := c.loadHistoryRaw()
+	if len(entries) == 0 {
+		return nil
 	}
 
-	// Rewrite history file without the deleted entry
-	newHistoryFile, err := os.OpenFile(c.historyPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600)
-	if err != nil {
-		return fmt.Errorf("opening history file for writing: %w", err)
-	}
-	defer newHistoryFile.Close()
+	// Remove all instances of the entry
+	entries = slices.DeleteFunc(entries, func(e HistoryEntry) bool {
+		return e == entry
+	})
 
-	for _, histEntry := range entries {
-		data, err := json.Marshal(histEntry)
-		if err != nil {
-			return fmt.Errorf("marshalling history entry: %w", err)
-		}
-		if _, err := newHistoryFile.WriteString(string(data) + "\n"); err != nil {
-			return fmt.Errorf("writing to history file: %w", err)
-		}
-	}
-
-	return nil
+	// Rewrite history file
+	return c.rewriteHistory(entries)
 }
 
 func (c *Controller) GenerateCommands(prompt string) ([]string, error) {
@@ -164,6 +103,80 @@ func (c *Controller) GenerateCommands(prompt string) ([]string, error) {
 		return nil, fmt.Errorf("creating model: %w", err)
 	}
 	return model.GenerateCommands(ctx, prompt)
+}
+
+func (c *Controller) loadHistoryRaw() []HistoryEntry {
+	if c.historyPath == "" {
+		return nil
+	}
+	file, err := os.Open(c.historyPath)
+	if err != nil {
+		return nil
+	}
+	defer file.Close()
+
+	var entries []HistoryEntry
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		var entry HistoryEntry
+		if err := json.Unmarshal(scanner.Bytes(), &entry); err != nil {
+			continue // Skip malformed entries
+		}
+		entries = append(entries, entry)
+	}
+
+	return entries
+}
+
+func (c *Controller) rewriteHistory(entries []HistoryEntry) error {
+	dir := filepath.Dir(c.historyPath)
+	tmp, err := os.CreateTemp(dir, "tmp-history-*.jsonl")
+	if err != nil {
+		return err
+	}
+	defer os.Remove(tmp.Name()) // Clean up temp file
+
+	// Write entries to the temporary file
+	for _, entry := range entries {
+		data, err := json.Marshal(entry)
+		if err != nil {
+			_ = tmp.Close()
+			return fmt.Errorf("marshalling history entry: %w", err)
+		}
+		if _, err := tmp.WriteString(string(data) + "\n"); err != nil {
+			_ = tmp.Close()
+			return fmt.Errorf("writing to tmp history file: %w", err)
+		}
+	}
+
+	// Flush
+	if err := tmp.Sync(); err != nil {
+		_ = tmp.Close()
+		return fmt.Errorf("syncing tmp history file: %w", err)
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+
+	// Rename tmp into the new file (which is atomic)
+	return os.Rename(tmp.Name(), c.historyPath)
+}
+
+func (c *Controller) logRejected(entry HistoryEntry) error {
+	f, err := os.OpenFile(c.rejectedPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
+	if err != nil {
+		return fmt.Errorf("opening rejected file: %w", err)
+	}
+	defer f.Close()
+
+	data, err := json.Marshal(entry)
+	if err != nil {
+		return fmt.Errorf("marshalling rejected entry: %w", err)
+	}
+	if _, err := f.WriteString(string(data) + "\n"); err != nil {
+		return fmt.Errorf("writing to rejected file: %w", err)
+	}
+	return nil
 }
 
 type HistoryEntry struct {
