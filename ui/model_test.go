@@ -2,10 +2,10 @@ package ui
 
 import (
 	"errors"
-	"strings"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/stretchr/testify/assert"
 
 	"github.com/mbrt/gencmd/ctrl"
 )
@@ -32,7 +32,6 @@ func TestCompleteUIWorkflow(t *testing.T) {
 			expectedResult: workflowResult{
 				selectedCommand: "ls -l",
 				finalState:      stateSelected,
-				noError:         true,
 			},
 		},
 		{
@@ -47,7 +46,6 @@ func TestCompleteUIWorkflow(t *testing.T) {
 			expectedResult: workflowResult{
 				selectedCommand: "ls -la",
 				finalState:      stateSelected,
-				noError:         true,
 			},
 		},
 		{
@@ -63,7 +61,6 @@ func TestCompleteUIWorkflow(t *testing.T) {
 			expectedResult: workflowResult{
 				selectedCommand: "find . -name '*.txt'",
 				finalState:      stateSelected,
-				noError:         true,
 			},
 		},
 		{
@@ -73,9 +70,8 @@ func TestCompleteUIWorkflow(t *testing.T) {
 				{action: pressKey, key: tea.KeyEsc},
 			},
 			expectedResult: workflowResult{
-				selectedCommand: "",
-				finalState:      stateSelected,
-				expectError:     ErrUserCancel,
+				finalState: stateSelected,
+				error:      "cancelled",
 			},
 		},
 		{
@@ -86,9 +82,8 @@ func TestCompleteUIWorkflow(t *testing.T) {
 				{action: pressKey, key: tea.KeyEnter},
 			},
 			expectedResult: workflowResult{
-				selectedCommand: "",
-				finalState:      stateSelected,
-				hasError:        true,
+				finalState: stateSelected,
+				error:      "no commands",
 			},
 		},
 	}
@@ -109,25 +104,15 @@ func TestCompleteUIWorkflow(t *testing.T) {
 			}
 
 			// Verify final state
-			if model.state != tt.expectedResult.finalState {
-				t.Errorf("expected final state %v, got %v", tt.expectedResult.finalState, model.state)
+			assert.Equal(t, tt.expectedResult.finalState, model.state)
+
+			if tt.expectedResult.error == "" {
+				assert.NoError(t, model.err)
+			} else {
+				assert.ErrorContains(t, model.err, tt.expectedResult.error)
 			}
 
-			if tt.expectedResult.noError && model.err != nil {
-				t.Errorf("expected no error, got %v", model.err)
-			}
-
-			if tt.expectedResult.expectError != nil && model.err != tt.expectedResult.expectError {
-				t.Errorf("expected error %v, got %v", tt.expectedResult.expectError, model.err)
-			}
-
-			if tt.expectedResult.hasError && model.err == nil {
-				t.Error("expected an error but got none")
-			}
-
-			if model.selected != tt.expectedResult.selectedCommand {
-				t.Errorf("expected selected command %q, got %q", tt.expectedResult.selectedCommand, model.selected)
-			}
+			assert.Equal(t, tt.expectedResult.selectedCommand, model.selected)
 		})
 	}
 }
@@ -142,40 +127,22 @@ func TestUIStateTransitions(t *testing.T) {
 	model := New(controller)
 
 	// Initial state should be prompting
-	if model.state != statePrompting {
-		t.Errorf("expected initial state statePrompting, got %v", model.state)
-	}
+	assert.Equal(t, statePrompting, model.state)
 
 	// Type a new prompt
 	model = typeTextIntoModel(model, "new prompt")
 
 	// Press enter to generate commands
-	updatedModel, _ := model.Update(tea.KeyMsg{Type: tea.KeyEnter})
-	model = updatedModel.(Model)
-
-	// Should transition to generating state
-	if model.state != stateGenerating {
-		t.Errorf("expected state stateGenerating after enter, got %v", model.state)
-	}
-
-	// Simulate command generation completion
-	generateMsg := generateMsg{Prompt: "new prompt", Commands: []string{"cmd1", "cmd2"}}
-	updatedModel, _ = model.Update(generateMsg)
-	model = updatedModel.(Model)
+	model = updateModel(model, tea.KeyMsg{Type: tea.KeyEnter})
 
 	// Should transition to selecting state (multiple commands)
-	if model.state != stateSelecting {
-		t.Errorf("expected state stateSelecting after generation, got %v", model.state)
-	}
+	assert.Equal(t, stateSelecting, model.state)
 
 	// Select a command
-	updatedModel, _ = model.Update(tea.KeyMsg{Type: tea.KeyEnter})
-	model = updatedModel.(Model)
+	model = updateModel(model, tea.KeyMsg{Type: tea.KeyEnter})
 
 	// Should transition to selected state
-	if model.state != stateSelected {
-		t.Errorf("expected state stateSelected after selection, got %v", model.state)
-	}
+	assert.Equal(t, stateSelected, model.state)
 }
 
 // TestUIErrorHandling tests error scenarios
@@ -204,34 +171,11 @@ func TestUIErrorHandling(t *testing.T) {
 
 			// Type prompt and submit
 			model = typeTextIntoModel(model, "test prompt")
-			updatedModel, _ := model.Update(tea.KeyMsg{Type: tea.KeyEnter})
-			model = updatedModel.(Model)
-
-			// Should be in generating state
-			if model.state != stateGenerating {
-				t.Errorf("expected generating state, got %v", model.state)
-			}
-
-			// Execute the generate command (this will trigger the error)
-			cmd := model.runGenerate("test prompt")
-			result := cmd()
-
-			// Update model with error message
-			updatedModel, _ = model.Update(result)
-			model = updatedModel.(Model)
+			model = updateModel(model, tea.KeyMsg{Type: tea.KeyEnter})
 
 			// Should be in selected state with error
-			if model.state != stateSelected {
-				t.Errorf("expected selected state after error, got %v", model.state)
-			}
-
-			if model.err == nil {
-				t.Error("expected error but got none")
-			}
-
-			if !strings.Contains(model.err.Error(), tt.expectedErr.Error()) {
-				t.Errorf("expected error containing %q, got %q", tt.expectedErr.Error(), model.err.Error())
-			}
+			assert.Equal(t, stateSelected, model.state)
+			assert.ErrorContains(t, model.err, tt.expectedErr.Error())
 		})
 	}
 }
@@ -280,21 +224,66 @@ func TestUIViewRendering(t *testing.T) {
 			tt.setup(&testModel)
 
 			view := testModel.View()
-			if view == "" {
-				t.Error("view should not be empty")
-			}
+			assert.NotEmpty(t, view)
 
 			// All views should contain title unless there's an error
-			if testModel.err == nil && !strings.Contains(view, "gencmd") {
-				t.Error("view should contain title when no error")
+			if testModel.err == nil {
+				assert.Contains(t, view, "gencmd")
 			}
 
 			// Error views should show error message
-			if testModel.err != nil && !strings.Contains(view, "Error:") {
-				t.Error("error view should contain 'Error:'")
+			if testModel.err != nil {
+				assert.Contains(t, view, "Error:")
 			}
 		})
 	}
+}
+
+// TestDeleteHistoryUI tests the UI functionality for deleting history entries
+func TestDeleteHistoryUI(t *testing.T) {
+	t.Run("delete selected history entry", func(t *testing.T) {
+		controller := &FakeController{
+			history: []ctrl.HistoryEntry{
+				{Prompt: "p1", Command: "c1"},
+				{Prompt: "p2", Command: "c2"},
+				{Prompt: "p3", Command: "c3"},
+			},
+		}
+
+		model := New(controller)
+
+		// Navigate to second entry (index 1)
+		model = updateModel(model, tea.KeyMsg{Type: tea.KeyDown})
+		// Delete
+		model = updateModel(model, tea.KeyMsg{Type: tea.KeyCtrlD})
+
+		// Verify the result
+		remainingHistory := controller.LoadHistory()
+		assert.Equal(t, []ctrl.HistoryEntry{
+			{Prompt: "p1", Command: "c1"},
+			{Prompt: "p3", Command: "c3"},
+		}, remainingHistory)
+	})
+
+	t.Run("delete with history not visible - should be no-op", func(t *testing.T) {
+		controller := &FakeController{
+			history: []ctrl.HistoryEntry{
+				{Prompt: "p1", Command: "c1"},
+				{Prompt: "p2", Command: "c2"},
+			},
+		}
+
+		model := New(controller)
+
+		// Hide history
+		model = updateModel(model, tea.KeyMsg{Type: tea.KeyCtrlN})
+		// Try to simulate delete - should have no effect
+		model = updateModel(model, tea.KeyMsg{Type: tea.KeyCtrlD})
+
+		// Verify history is unchanged
+		remainingHistory := controller.LoadHistory()
+		assert.Equal(t, 2, len(remainingHistory))
+	})
 }
 
 // Test helper types and functions
@@ -315,9 +304,7 @@ type userAction struct {
 type workflowResult struct {
 	selectedCommand string
 	finalState      state
-	noError         bool
-	expectError     error
-	hasError        bool
+	error           string
 }
 
 func executeAction(t *testing.T, model Model, action userAction) Model {
@@ -325,19 +312,7 @@ func executeAction(t *testing.T, model Model, action userAction) Model {
 	case typeText:
 		return typeTextIntoModel(model, action.value)
 	case pressKey:
-		updatedModel, cmd := model.Update(tea.KeyMsg{Type: action.key})
-		model = updatedModel.(Model)
-
-		// If a command was returned, execute it and feed the result back
-		if cmd != nil {
-			result := cmd()
-			if result != nil {
-				updatedModel, _ := model.Update(result)
-				model = updatedModel.(Model)
-			}
-		}
-
-		return model
+		return updateModel(model, tea.KeyMsg{Type: action.key})
 	default:
 		t.Fatalf("unknown action type: %v", action.action)
 		return model
@@ -353,4 +328,24 @@ func typeTextIntoModel(model Model, text string) Model {
 		model = updatedModel.(Model)
 	}
 	return model
+}
+
+func updateModel(m Model, msg tea.Msg) Model {
+	if msg == nil || msg == tea.Quit() {
+		return m
+	}
+	// Handle batch messages
+	if msg, ok := msg.(tea.BatchMsg); ok {
+		for _, cmd := range msg {
+			m = updateModel(m, cmd())
+		}
+		return m
+	}
+	// Update the model
+	um, cmd := m.Update(msg)
+	m = um.(Model)
+	if cmd == nil {
+		return m
+	}
+	return updateModel(m, cmd())
 }

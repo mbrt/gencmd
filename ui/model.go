@@ -74,6 +74,7 @@ type Options struct {
 type Controller interface {
 	LoadHistory() []ctrl.HistoryEntry
 	UpdateHistory(prompt, command string) error
+	DeleteHistory(entry ctrl.HistoryEntry) error
 	GenerateCommands(prompt string) ([]string, error)
 }
 
@@ -89,6 +90,8 @@ type Model struct {
 	promptText string
 	selected   string
 	err        error
+	width      int
+	height     int
 }
 
 func New(c Controller) Model {
@@ -97,7 +100,7 @@ func New(c Controller) Model {
 	return Model{
 		controller: c,
 		KeyMap:     km,
-		prompt:     newPromptModel(km, c.LoadHistory()),
+		prompt:     newPromptModel(km, c),
 		wait:       newWaitModel(km),
 		selectCmp:  newSelectModel(km),
 		help:       h,
@@ -114,33 +117,32 @@ func (m Model) Init() tea.Cmd {
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmds []tea.Cmd
-	var cmd tea.Cmd
 
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
-		// Leave space for help and title
-		msg.Height -= 4
-		// Forward window size message to models
-		m, cmd = m.updateModels(msg, false)
-		cmds = append(cmds, cmd)
+		// Store the original window size for potential resize events
+		m.width = msg.Width
+		m.height = msg.Height
+		// Calculate available height for content
+		availableHeight := m.calculateAvailableHeight(msg.Height)
+		resizedMsg := tea.WindowSizeMsg{Width: msg.Width, Height: availableHeight}
+		// Forward adjusted window size message to models
+		cmds = append(cmds, m.updateModels(resizedMsg, false))
 
 	case tea.KeyMsg:
-		m, cmd = m.handleKey(msg)
-		cmds = append(cmds, cmd)
-		m, cmd = m.updateModels(msg, false)
-		cmds = append(cmds, cmd)
+		cmds = append(cmds,
+			m.handleKey(msg),
+			m.updateModels(msg, false),
+		)
 
 	case generateMsg:
-		cmd = m.handleCompletion(msg.Prompt, msg.Commands)
-		return m, cmd
+		cmds = append(cmds, m.handleCompletion(msg.Prompt, msg.Commands))
 
 	case errMsg:
-		cmd = m.quitWithError(msg)
-		return m, cmd
+		cmds = append(cmds, m.quitWithError(msg))
 
 	default:
-		m, cmd = m.updateModels(msg, false)
-		cmds = append(cmds, cmd)
+		cmds = append(cmds, m.updateModels(msg, false))
 	}
 
 	return m, tea.Batch(cmds...)
@@ -184,12 +186,23 @@ func (m Model) ShortHelp() []key.Binding {
 }
 
 func (m Model) FullHelp() [][]key.Binding {
-	return [][]key.Binding{m.ShortHelp()}
+	switch m.state {
+	case statePrompting:
+		return m.prompt.FullHelp()
+	case stateGenerating:
+		return m.wait.FullHelp()
+	case stateSelecting:
+		return m.selectCmp.FullHelp()
+	default:
+		return [][]key.Binding{{m.KeyMap.Cancel}}
+	}
 }
 
-func (m Model) updateModels(msg tea.Msg, onlyActive bool) (Model, tea.Cmd) {
-	var cmds []tea.Cmd
-	var cmd tea.Cmd
+func (m *Model) updateModels(msg tea.Msg, onlyActive bool) tea.Cmd {
+	var (
+		cmds []tea.Cmd
+		cmd  tea.Cmd
+	)
 
 	if !onlyActive || m.state == statePrompting {
 		m.prompt, cmd = m.prompt.Update(msg)
@@ -204,14 +217,13 @@ func (m Model) updateModels(msg tea.Msg, onlyActive bool) (Model, tea.Cmd) {
 		cmds = append(cmds, cmd)
 	}
 
-	return m, tea.Batch(cmds...)
+	return tea.Batch(cmds...)
 }
 
-func (m Model) handleKey(msg tea.KeyMsg) (Model, tea.Cmd) {
+func (m *Model) handleKey(msg tea.KeyMsg) tea.Cmd {
 	switch {
 	case key.Matches(msg, m.KeyMap.Cancel):
-		cmd := m.quitWithError(ErrUserCancel)
-		return m, cmd
+		return m.quitWithError(ErrUserCancel)
 
 	case key.Matches(msg, m.KeyMap.Submit):
 		switch m.state {
@@ -220,22 +232,28 @@ func (m Model) handleKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 			// User submitted a prompt
 			selected := m.prompt.Selected()
 			if selected.IsNew() {
-				cmd := m.runGenerate(selected.Prompt)
-				return m, cmd
+				return m.runGenerate(selected.Prompt)
 			}
 			// User selected an existing command
-			cmd := m.selectCommand(selected.Prompt, selected.Command)
-			return m, cmd
+			return m.selectCommand(selected.Prompt, selected.Command)
 
 		case stateSelecting:
 			// User selected a command from the list
 			selected := m.selectCmp.Selected()
-			cmd := m.selectCommand(m.promptText, selected)
-			return m, cmd
+			return m.selectCommand(m.promptText, selected)
+		}
+
+	case key.Matches(msg, m.KeyMap.ToggleHelp):
+		m.help.ShowAll = !m.help.ShowAll
+		// Trigger a resize event to update list heights based on new help size
+		if m.width > 0 {
+			availableHeight := m.calculateAvailableHeight(m.height)
+			resizedMsg := tea.WindowSizeMsg{Width: m.width, Height: availableHeight}
+			return m.updateModels(resizedMsg, true)
 		}
 	}
 
-	return m, nil
+	return nil
 }
 
 func (m *Model) runGenerate(prompt string) tea.Cmd {
@@ -282,6 +300,21 @@ func (m *Model) quitWithError(err error) tea.Cmd {
 	m.selected = ""
 	return tea.Quit
 
+}
+
+// calculateAvailableHeight determines how much height is available for content
+// by accounting for title and help text
+func (m Model) calculateAvailableHeight(totalHeight int) int {
+	// Account for title (1 line)
+	usedHeight := 1
+	// Account for help text height
+	helpText := m.help.View(m)
+	if helpText != "" {
+		// Add padding from helpStyle (+1 top padding)
+		usedHeight += lipgloss.Height(helpText) + 1
+	}
+	// Leave some margin
+	return max(totalHeight-usedHeight, 1)
 }
 
 type errMsg error

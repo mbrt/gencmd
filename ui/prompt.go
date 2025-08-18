@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"slices"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/key"
@@ -11,7 +12,8 @@ import (
 	"github.com/mbrt/gencmd/ctrl"
 )
 
-func newPromptModel(km KeyMap, history []ctrl.HistoryEntry) promptModel {
+func newPromptModel(km KeyMap, c Controller) promptModel {
+	history := c.LoadHistory()
 	items := make([]list.Item, len(history))
 	for i, entry := range history {
 		items[i] = historyEntry{entry}
@@ -30,6 +32,7 @@ func newPromptModel(km KeyMap, history []ctrl.HistoryEntry) promptModel {
 	ti.Width = 80
 
 	res := promptModel{
+		controller:     c,
 		keyMap:         km,
 		list:           l,
 		textInput:      ti,
@@ -40,6 +43,7 @@ func newPromptModel(km KeyMap, history []ctrl.HistoryEntry) promptModel {
 }
 
 type promptModel struct {
+	controller     Controller
 	keyMap         KeyMap
 	list           list.Model
 	textInput      textinput.Model
@@ -60,7 +64,8 @@ func (m promptModel) Update(msg tea.Msg) (promptModel, tea.Cmd) {
 		return m, nil
 
 	case tea.KeyMsg:
-		return m.handleKey(msg)
+		cmd := m.handleKey(msg)
+		return m, cmd
 
 	default:
 		return m, nil
@@ -85,13 +90,30 @@ func (m promptModel) View() string {
 func (m promptModel) ShortHelp() []key.Binding {
 	bindings := []key.Binding{
 		m.keyMap.Submit,
-		m.keyMap.Cancel,
 	}
 	if m.list.SelectedItem() != nil && m.historyVisible {
 		bindings = append(bindings, m.keyMap.Up, m.keyMap.Down)
 	}
-	bindings = append(bindings, m.keyMap.ToggleHistory)
+	bindings = append(bindings, m.keyMap.ToggleHelp)
 	return bindings
+}
+
+func (m promptModel) FullHelp() [][]key.Binding {
+	return [][]key.Binding{
+		{
+			m.keyMap.Submit,
+			m.keyMap.Cancel,
+		},
+		{
+			m.keyMap.Up,
+			m.keyMap.Down,
+		},
+		{
+			m.keyMap.DeleteHistory,
+			m.keyMap.ToggleHistory,
+			m.keyMap.ToggleHelp,
+		},
+	}
 }
 
 func (m promptModel) Selected() inputPrompt {
@@ -103,17 +125,24 @@ func (m promptModel) Selected() inputPrompt {
 	return inputPrompt{Prompt: m.textInput.Value()}
 }
 
-func (m promptModel) handleKey(msg tea.KeyMsg) (promptModel, tea.Cmd) {
+func (m *promptModel) handleKey(msg tea.KeyMsg) tea.Cmd {
 	switch {
 	case key.Matches(msg, m.keyMap.Up):
 		m.list.CursorUp()
-		return m, nil
+		return nil
+
 	case key.Matches(msg, m.keyMap.Down):
 		m.list.CursorDown()
-		return m, nil
+		return nil
+
 	case key.Matches(msg, m.keyMap.ToggleHistory):
 		m.historyVisible = !m.historyVisible
 		m.updateDefaultText()
+		m.keyMap.DeleteHistory.SetEnabled(m.historyVisible)
+		return nil
+
+	case key.Matches(msg, m.keyMap.DeleteHistory):
+		return m.handleDeleteHistory()
 	}
 	// Handle text input updates.
 	// Store the old value, update and compare for changes.
@@ -124,7 +153,7 @@ func (m promptModel) handleKey(msg tea.KeyMsg) (promptModel, tea.Cmd) {
 	if newValue != oldValue {
 		m.filterItems(newValue)
 	}
-	return m, cmd
+	return cmd
 }
 
 func (m *promptModel) filterItems(query string) {
@@ -136,6 +165,7 @@ func (m *promptModel) filterItems(query string) {
 		m.list.SetFilteringEnabled(true)
 	}
 	m.list.SetFilterText(query)
+	m.updateDefaultText()
 }
 
 func (m *promptModel) updateDefaultText() {
@@ -175,4 +205,51 @@ func (h historyEntry) Title() string {
 
 func (h historyEntry) Description() string {
 	return h.Command
+}
+
+func (m *promptModel) handleDeleteHistory() tea.Cmd {
+	// Only allow deletion if history is visible and an item is selected
+	if !m.historyVisible || len(m.list.Items()) == 0 {
+		return nil
+	}
+
+	selectedItem := m.list.SelectedItem()
+	if selectedItem == nil {
+		return nil
+	}
+
+	var cmds []tea.Cmd
+
+	// Get the selected history entry
+	he := selectedItem.(historyEntry).HistoryEntry
+
+	// Remove the item from the list
+	items := m.list.Items()
+	selectedIndex := m.list.GlobalIndex()
+
+	// Create new items slice without the selected item
+	newItems := slices.Delete(items, selectedIndex, selectedIndex+1)
+	// Update the list with new items
+	cmds = append(cmds, tea.Sequence(
+		m.list.SetItems(newItems),
+		func() tea.Msg {
+			m.filterItems(m.textInput.Value())
+			return nil
+		},
+	))
+
+	// Adjust cursor position if necessary
+	if selectedIndex >= len(newItems) && len(newItems) > 0 {
+		m.list.Select(len(newItems) - 1)
+	}
+
+	// Delete from the controller (async)
+	cmds = append(cmds, func() tea.Msg {
+		err := m.controller.DeleteHistory(he)
+		if err != nil {
+			return errMsg(err)
+		}
+		return nil
+	})
+	return tea.Batch(cmds...)
 }
