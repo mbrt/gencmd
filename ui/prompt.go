@@ -130,13 +130,17 @@ func (m *promptModel) handleKey(msg tea.KeyMsg) tea.Cmd {
 	case key.Matches(msg, m.keyMap.Up):
 		m.list.CursorUp()
 		return nil
+
 	case key.Matches(msg, m.keyMap.Down):
 		m.list.CursorDown()
 		return nil
+
 	case key.Matches(msg, m.keyMap.ToggleHistory):
 		m.historyVisible = !m.historyVisible
 		m.updateDefaultText()
+		m.keyMap.DeleteHistory.SetEnabled(m.historyVisible)
 		return nil
+
 	case key.Matches(msg, m.keyMap.DeleteHistory):
 		return m.handleDeleteHistory()
 	}

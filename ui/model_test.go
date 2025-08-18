@@ -276,7 +276,7 @@ func TestDeleteHistoryUI(t *testing.T) {
 		model := New(controller)
 
 		// Hide history
-		model = updateModel(model, tea.KeyMsg{Type: tea.KeyCtrlH})
+		model = updateModel(model, tea.KeyMsg{Type: tea.KeyCtrlN})
 		// Try to simulate delete - should have no effect
 		model = updateModel(model, tea.KeyMsg{Type: tea.KeyCtrlD})
 

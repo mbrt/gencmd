@@ -90,6 +90,8 @@ type Model struct {
 	promptText string
 	selected   string
 	err        error
+	width      int
+	height     int
 }
 
 func New(c Controller) Model {
@@ -118,10 +120,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
-		// Leave space for help and title
-		msg.Height -= 4
-		// Forward window size message to models
-		cmds = append(cmds, m.updateModels(msg, false))
+		// Store the original window size for potential resize events
+		m.width = msg.Width
+		m.height = msg.Height
+		// Calculate available height for content
+		availableHeight := m.calculateAvailableHeight(msg.Height)
+		resizedMsg := tea.WindowSizeMsg{Width: msg.Width, Height: availableHeight}
+		// Forward adjusted window size message to models
+		cmds = append(cmds, m.updateModels(resizedMsg, false))
 
 	case tea.KeyMsg:
 		cmds = append(cmds,
@@ -239,6 +245,12 @@ func (m *Model) handleKey(msg tea.KeyMsg) tea.Cmd {
 
 	case key.Matches(msg, m.KeyMap.ToggleHelp):
 		m.help.ShowAll = !m.help.ShowAll
+		// Trigger a resize event to update list heights based on new help size
+		if m.width > 0 {
+			availableHeight := m.calculateAvailableHeight(m.height)
+			resizedMsg := tea.WindowSizeMsg{Width: m.width, Height: availableHeight}
+			return m.updateModels(resizedMsg, true)
+		}
 	}
 
 	return nil
@@ -288,6 +300,21 @@ func (m *Model) quitWithError(err error) tea.Cmd {
 	m.selected = ""
 	return tea.Quit
 
+}
+
+// calculateAvailableHeight determines how much height is available for content
+// by accounting for title and help text
+func (m Model) calculateAvailableHeight(totalHeight int) int {
+	// Account for title (1 line)
+	usedHeight := 1
+	// Account for help text height
+	helpText := m.help.View(m)
+	if helpText != "" {
+		// Add padding from helpStyle (+1 top padding)
+		usedHeight += lipgloss.Height(helpText) + 1
+	}
+	// Leave some margin
+	return max(totalHeight-usedHeight, 1)
 }
 
 type errMsg error
