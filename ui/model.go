@@ -98,7 +98,7 @@ func New(c Controller) Model {
 	return Model{
 		controller: c,
 		KeyMap:     km,
-		prompt:     newPromptModel(km, c.LoadHistory()),
+		prompt:     newPromptModel(km, c),
 		wait:       newWaitModel(km),
 		selectCmp:  newSelectModel(km),
 		help:       h,
@@ -115,37 +115,28 @@ func (m Model) Init() tea.Cmd {
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmds []tea.Cmd
-	var cmd tea.Cmd
 
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		// Leave space for help and title
 		msg.Height -= 4
 		// Forward window size message to models
-		m, cmd = m.updateModels(msg, false)
-		cmds = append(cmds, cmd)
+		cmds = append(cmds, m.updateModels(msg, false))
 
 	case tea.KeyMsg:
-		m, cmd = m.handleKey(msg)
-		cmds = append(cmds, cmd)
-		m, cmd = m.updateModels(msg, false)
-		cmds = append(cmds, cmd)
+		cmds = append(cmds,
+			m.handleKey(msg),
+			m.updateModels(msg, false),
+		)
 
 	case generateMsg:
-		cmd = m.handleCompletion(msg.Prompt, msg.Commands)
-		return m, cmd
-
-	case deleteHistoryMsg:
-		cmd = m.handleDeleteHistory(msg.Entry)
-		return m, cmd
+		cmds = append(cmds, m.handleCompletion(msg.Prompt, msg.Commands))
 
 	case errMsg:
-		cmd = m.quitWithError(msg)
-		return m, cmd
+		cmds = append(cmds, m.quitWithError(msg))
 
 	default:
-		m, cmd = m.updateModels(msg, false)
-		cmds = append(cmds, cmd)
+		cmds = append(cmds, m.updateModels(msg, false))
 	}
 
 	return m, tea.Batch(cmds...)
@@ -199,9 +190,11 @@ func (m Model) FullHelp() [][]key.Binding {
 	return [][]key.Binding{bindings}
 }
 
-func (m Model) updateModels(msg tea.Msg, onlyActive bool) (Model, tea.Cmd) {
-	var cmds []tea.Cmd
-	var cmd tea.Cmd
+func (m *Model) updateModels(msg tea.Msg, onlyActive bool) tea.Cmd {
+	var (
+		cmds []tea.Cmd
+		cmd  tea.Cmd
+	)
 
 	if !onlyActive || m.state == statePrompting {
 		m.prompt, cmd = m.prompt.Update(msg)
@@ -216,14 +209,13 @@ func (m Model) updateModels(msg tea.Msg, onlyActive bool) (Model, tea.Cmd) {
 		cmds = append(cmds, cmd)
 	}
 
-	return m, tea.Batch(cmds...)
+	return tea.Batch(cmds...)
 }
 
-func (m Model) handleKey(msg tea.KeyMsg) (Model, tea.Cmd) {
+func (m *Model) handleKey(msg tea.KeyMsg) tea.Cmd {
 	switch {
 	case key.Matches(msg, m.KeyMap.Cancel):
-		cmd := m.quitWithError(ErrUserCancel)
-		return m, cmd
+		return m.quitWithError(ErrUserCancel)
 
 	case key.Matches(msg, m.KeyMap.Submit):
 		switch m.state {
@@ -232,22 +224,19 @@ func (m Model) handleKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 			// User submitted a prompt
 			selected := m.prompt.Selected()
 			if selected.IsNew() {
-				cmd := m.runGenerate(selected.Prompt)
-				return m, cmd
+				return m.runGenerate(selected.Prompt)
 			}
 			// User selected an existing command
-			cmd := m.selectCommand(selected.Prompt, selected.Command)
-			return m, cmd
+			return m.selectCommand(selected.Prompt, selected.Command)
 
 		case stateSelecting:
 			// User selected a command from the list
 			selected := m.selectCmp.Selected()
-			cmd := m.selectCommand(m.promptText, selected)
-			return m, cmd
+			return m.selectCommand(m.promptText, selected)
 		}
 	}
 
-	return m, nil
+	return nil
 }
 
 func (m *Model) runGenerate(prompt string) tea.Cmd {
@@ -288,16 +277,6 @@ func (m *Model) selectCommand(prompt string, command string) tea.Cmd {
 	return tea.Quit
 }
 
-func (m *Model) handleDeleteHistory(entry ctrl.HistoryEntry) tea.Cmd {
-	return func() tea.Msg {
-		err := m.controller.DeleteHistory(entry)
-		if err != nil {
-			return errMsg(err)
-		}
-		return nil
-	}
-}
-
 func (m *Model) quitWithError(err error) tea.Cmd {
 	m.err = err
 	m.state = stateSelected
@@ -311,8 +290,4 @@ type errMsg error
 type generateMsg struct {
 	Prompt   string
 	Commands []string
-}
-
-type deleteHistoryMsg struct {
-	Entry ctrl.HistoryEntry
 }

@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"slices"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/key"
@@ -11,7 +12,8 @@ import (
 	"github.com/mbrt/gencmd/ctrl"
 )
 
-func newPromptModel(km KeyMap, history []ctrl.HistoryEntry) promptModel {
+func newPromptModel(km KeyMap, c Controller) promptModel {
+	history := c.LoadHistory()
 	items := make([]list.Item, len(history))
 	for i, entry := range history {
 		items[i] = historyEntry{entry}
@@ -30,6 +32,7 @@ func newPromptModel(km KeyMap, history []ctrl.HistoryEntry) promptModel {
 	ti.Width = 80
 
 	res := promptModel{
+		controller:     c,
 		keyMap:         km,
 		list:           l,
 		textInput:      ti,
@@ -40,6 +43,7 @@ func newPromptModel(km KeyMap, history []ctrl.HistoryEntry) promptModel {
 }
 
 type promptModel struct {
+	controller     Controller
 	keyMap         KeyMap
 	list           list.Model
 	textInput      textinput.Model
@@ -60,7 +64,8 @@ func (m promptModel) Update(msg tea.Msg) (promptModel, tea.Cmd) {
 		return m, nil
 
 	case tea.KeyMsg:
-		return m.handleKey(msg)
+		cmd := m.handleKey(msg)
+		return m, cmd
 
 	default:
 		return m, nil
@@ -103,14 +108,14 @@ func (m promptModel) Selected() inputPrompt {
 	return inputPrompt{Prompt: m.textInput.Value()}
 }
 
-func (m promptModel) handleKey(msg tea.KeyMsg) (promptModel, tea.Cmd) {
+func (m *promptModel) handleKey(msg tea.KeyMsg) tea.Cmd {
 	switch {
 	case key.Matches(msg, m.keyMap.Up):
 		m.list.CursorUp()
-		return m, nil
+		return nil
 	case key.Matches(msg, m.keyMap.Down):
 		m.list.CursorDown()
-		return m, nil
+		return nil
 	case key.Matches(msg, m.keyMap.ToggleHistory):
 		m.historyVisible = !m.historyVisible
 		m.updateDefaultText()
@@ -126,7 +131,7 @@ func (m promptModel) handleKey(msg tea.KeyMsg) (promptModel, tea.Cmd) {
 	if newValue != oldValue {
 		m.filterItems(newValue)
 	}
-	return m, cmd
+	return cmd
 }
 
 func (m *promptModel) filterItems(query string) {
@@ -179,42 +184,41 @@ func (h historyEntry) Description() string {
 	return h.Command
 }
 
-func (m promptModel) handleDeleteHistory() (promptModel, tea.Cmd) {
+func (m *promptModel) handleDeleteHistory() tea.Cmd {
 	// Only allow deletion if history is visible and an item is selected
 	if !m.historyVisible || len(m.list.Items()) == 0 {
-		return m, nil
+		return nil
 	}
 
 	selectedItem := m.list.SelectedItem()
 	if selectedItem == nil {
-		return m, nil
+		return nil
 	}
 
 	// Get the selected history entry
-	he := selectedItem.(historyEntry)
+	he := selectedItem.(historyEntry).HistoryEntry
 
 	// Remove the item from the list
 	items := m.list.Items()
 	selectedIndex := m.list.Index()
 
 	// Create new items slice without the selected item
-	newItems := make([]list.Item, 0, len(items)-1)
-	for i, item := range items {
-		if i != selectedIndex {
-			newItems = append(newItems, item)
-		}
-	}
-
+	newItems := slices.Delete(items, selectedIndex, selectedIndex+1)
 	// Update the list with new items
 	m.list.SetItems(newItems)
+	m.filterItems(m.textInput.Value())
 
 	// Adjust cursor position if necessary
 	if selectedIndex >= len(newItems) && len(newItems) > 0 {
 		m.list.Select(len(newItems) - 1)
 	}
 
-	// Send a command to delete from the controller
-	return m, func() tea.Msg {
-		return deleteHistoryMsg{Entry: he.HistoryEntry}
+	// Delete from the controller (async)
+	return func() tea.Msg {
+		err := m.controller.DeleteHistory(he)
+		if err != nil {
+			return errMsg(err)
+		}
+		return nil
 	}
 }

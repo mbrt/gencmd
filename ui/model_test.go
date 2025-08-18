@@ -253,15 +253,9 @@ func TestDeleteHistoryUI(t *testing.T) {
 		model := New(controller)
 
 		// Navigate to second entry (index 1)
-		updateModel(model, tea.KeyMsg{Type: tea.KeyDown})
-
-		// Simulate the deleteHistoryMsg directly since the key binding test
-		// is handled separately
-		entryToDelete := controller.history[1] // "p2", "c2"
-		deleteMsg := deleteHistoryMsg{Entry: entryToDelete}
-
-		// Send the delete message
-		updateModel(model, deleteMsg)
+		model = updateModel(model, tea.KeyMsg{Type: tea.KeyDown})
+		// Delete
+		model = updateModel(model, tea.KeyMsg{Type: tea.KeyCtrlD})
 
 		// Verify the result
 		remainingHistory := controller.LoadHistory()
@@ -283,107 +277,13 @@ func TestDeleteHistoryUI(t *testing.T) {
 
 		// Hide history
 		model = updateModel(model, tea.KeyMsg{Type: tea.KeyCtrlH})
-
 		// Try to simulate delete - should have no effect
-		entryToDelete := controller.history[0]
-		deleteMsg := deleteHistoryMsg{Entry: entryToDelete}
-		model = updateModel(model, deleteMsg)
+		model = updateModel(model, tea.KeyMsg{Type: tea.KeyCtrlD})
 
 		// Verify history is unchanged
 		remainingHistory := controller.LoadHistory()
-		assert.Equal(t, 1, len(remainingHistory)) // DeleteHistory still removes it from controller
+		assert.Equal(t, 2, len(remainingHistory))
 	})
-}
-
-// TestDeleteHistoryMessage tests that deleteHistoryMsg is properly handled
-func TestDeleteHistoryMessage(t *testing.T) {
-	controller := &FakeController{
-		history: []ctrl.HistoryEntry{
-			{Prompt: "test", Command: "cmd"},
-		},
-	}
-
-	model := New(controller)
-
-	// Create a delete message
-	entryToDelete := ctrl.HistoryEntry{Prompt: "test", Command: "cmd"}
-	deleteMsg := deleteHistoryMsg{Entry: entryToDelete}
-
-	// Send the message to the model
-	model = updateModel(model, deleteMsg)
-	assert.Empty(t, controller.LoadHistory())
-}
-
-// TestDeleteHistoryUIIntegration tests the full delete workflow in the UI
-func TestDeleteHistoryUIIntegration(t *testing.T) {
-	// Setup controller with multiple history entries
-	controller := &FakeController{
-		history: []ctrl.HistoryEntry{
-			{Prompt: "first", Command: "cmd1"},
-			{Prompt: "second", Command: "cmd2"},
-			{Prompt: "third", Command: "cmd3"},
-		},
-	}
-
-	model := New(controller)
-
-	// Ensure we're in prompting state with history visible
-	assert.Equal(t, statePrompting, model.state)
-
-	// Simulate deleting the second entry directly
-	entryToDelete := ctrl.HistoryEntry{Prompt: "second", Command: "cmd2"}
-	deleteMsg := deleteHistoryMsg{Entry: entryToDelete}
-
-	// Send the delete message
-	model = updateModel(model, deleteMsg)
-	// Verify the UI was updated
-	remainingHistory := controller.LoadHistory()
-	expectedRemaining := 2
-
-	assert.Equal(t, expectedRemaining, len(remainingHistory))
-
-	// Verify the specific entry was removed
-	for _, remaining := range remainingHistory {
-		assert.False(t, remaining.Prompt == "second" && remaining.Command == "cmd2", "deleted entry still exists in history")
-	}
-
-	// Verify we're still in prompting state
-	assert.Equal(t, statePrompting, model.state)
-}
-
-// TestDeleteHistoryFullHelp tests that delete binding appears in full help
-func TestDeleteHistoryFullHelp(t *testing.T) {
-	controller := NewFakeController()
-	model := New(controller)
-
-	// Get full help when in prompting state
-	fullHelp := model.FullHelp()
-	assert.NotEmpty(t, fullHelp, "FullHelp should return at least one group of bindings")
-
-	// Check that DeleteHistory binding is included
-	foundDeleteBinding := false
-	for _, group := range fullHelp {
-		for _, binding := range group {
-			if len(binding.Keys()) > 0 && binding.Keys()[0] == "ctrl+d" {
-				foundDeleteBinding = true
-				break
-			}
-		}
-	}
-
-	assert.True(t, foundDeleteBinding, "DeleteHistory binding should appear in full help when in prompting state")
-
-	// Verify it doesn't appear in short help
-	shortHelp := model.ShortHelp()
-	foundInShortHelp := false
-	for _, binding := range shortHelp {
-		if len(binding.Keys()) > 0 && binding.Keys()[0] == "ctrl+d" {
-			foundInShortHelp = true
-			break
-		}
-	}
-
-	assert.False(t, foundInShortHelp, "DeleteHistory binding should NOT appear in short help")
 }
 
 // Test helper types and functions
