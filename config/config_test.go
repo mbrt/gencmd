@@ -1,9 +1,13 @@
 package config
 
 import (
+	"os"
+	"strings"
 	"testing"
 
+	"github.com/adrg/xdg"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestConfigLoad(t *testing.T) {
@@ -39,7 +43,7 @@ func TestConfigLoad(t *testing.T) {
 			name: "gemini env",
 			path: "testdata/empty.yaml",
 			env: map[string]string{
-				"GOOGLE_GENAI_API_KEY": "xyz-123",
+				"GEMINI_API_KEY": "xyz-123",
 			},
 			want: Config{
 				LLM: LLMConfig{
@@ -74,10 +78,77 @@ func TestConfigLoad(t *testing.T) {
 			got, err := LoadFrom(tt.path)
 			if tt.wantErr != "" {
 				assert.ErrorContains(t, err, tt.wantErr)
-			} else {
-				assert.NoError(t, err)
+				return
 			}
-			assert.Equal(t, tt.want, got)
+			assert.NoError(t, err)
+			assert.EqualExportedValues(t, tt.want, got)
+		})
+	}
+}
+
+func TestConfigString(t *testing.T) {
+	tests := []struct {
+		name string
+		path string
+		want string
+		env  map[string]string
+	}{
+		{
+			name: "empty",
+			path: "testdata/empty.yaml",
+			want: "testdata/strings/empty.yaml",
+		},
+		{
+			name: "override",
+			path: "testdata/override.yaml",
+			want: "testdata/strings/override.yaml",
+		},
+		{
+			name: "gemini env",
+			path: "testdata/empty.yaml",
+			env: map[string]string{
+				"GEMINI_API_KEY": "xyz-123",
+			},
+			want: "testdata/strings/gemini.yaml",
+		},
+		{
+			name: "openai env",
+			path: "testdata/openai.yaml",
+			env: map[string]string{
+				"OPENAI_API_KEY": "xyz-123",
+			},
+			want: "testdata/strings/openai.yaml",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfgdir := t.TempDir()
+
+			// Prepare environment
+			t.Setenv("XDG_CONFIG_HOME", cfgdir)
+			xdg.Reload()
+			for k, v := range tt.env {
+				t.Setenv(k, v)
+			}
+
+			// Copy configuration to temporary directory
+			cfgpath, err := configPath("config.yaml")
+			require.NoError(t, err)
+			b, err := os.ReadFile(tt.path)
+			require.NoError(t, err)
+			err = os.WriteFile(cfgpath, b, 0600)
+			require.NoError(t, err)
+
+			// Load want
+			b, err = os.ReadFile(tt.want)
+			require.NoError(t, err)
+			want := strings.ReplaceAll(string(b), "$XDG_CONFIG_HOME", xdg.ConfigHome)
+
+			// Load configuration
+			got, err := Load()
+			require.NoError(t, err)
+			assert.Equal(t, strings.TrimSpace(want), strings.TrimSpace(got.String()))
 		})
 	}
 }

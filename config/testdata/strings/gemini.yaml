@@ -1,0 +1,9 @@
+# Configuration file: $XDG_CONFIG_HOME/gencmd/config.yaml
+# Environment file: $XDG_CONFIG_HOME/gencmd/.env
+# Set environment variables: GEMINI_API_KEY
+llm:
+    provider: googleai
+    modelName: gemini-2.0-flash-lite
+    promptTemplate: |
+        You are a command line expert. Generate up to 5 shell command alternatives that implement the following description:
+        {{.UserInput}}
