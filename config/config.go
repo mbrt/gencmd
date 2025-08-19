@@ -37,6 +37,7 @@ func LoadFrom(path string) (Config, error) {
 	if err := decoder.Decode(&res); err != nil {
 		return res, fmt.Errorf("failed to decode config file: %w", err)
 	}
+	res.cfgPath = path
 	return res, nil
 }
 
@@ -57,7 +58,7 @@ func DefaultFromEnv() Config {
 	// Provider
 	if v, ok := os.LookupEnv("GOOGLE_GENAI_USE_VERTEXAI"); ok && strings.ToLower(v) == "true" {
 		cfg.LLM.Provider = "vertexai"
-	} else if _, ok := os.LookupEnv("GOOGLE_GENAI_API_KEY"); ok {
+	} else if _, ok := os.LookupEnv("GEMINI_API_KEY"); ok {
 		cfg.LLM.Provider = "googleai"
 	} else if _, ok := os.LookupEnv("OPENAI_API_KEY"); ok {
 		cfg.LLM.Provider = "openai"
@@ -79,12 +80,33 @@ func DefaultFromEnv() Config {
 		cfg.LLM.ModelName = "gemma-3"
 	}
 
+	cfg.envPath, _ = configPath(".env")
 	return cfg
 }
 
 // Config represents the configuration structure for the application.
 type Config struct {
-	LLM LLMConfig `yaml:"llm"`
+	LLM     LLMConfig `yaml:"llm"`
+	cfgPath string
+	envPath string
+}
+
+func (c Config) String() string {
+	var buf strings.Builder
+	if c.cfgPath != "" {
+		buf.WriteString(fmt.Sprintf("# Configuration file: %s\n", c.cfgPath))
+	}
+	if c.envPath != "" {
+		buf.WriteString(fmt.Sprintf("# Environment file: %s\n", c.envPath))
+	}
+	if envs := collectSetEnvVars(); len(envs) > 0 {
+		buf.WriteString(fmt.Sprintf("# Set environment variables: %s\n", strings.Join(envs, ", ")))
+	}
+
+	// Marshal and print the configuration
+	yamlData, _ := yaml.Marshal(c)
+	buf.Write(yamlData)
+	return buf.String()
 }
 
 // LLMConfig represents the configuration for the Language Model.
@@ -92,4 +114,21 @@ type LLMConfig struct {
 	Provider       string `yaml:"provider"`
 	ModelName      string `yaml:"modelName"`
 	PromptTemplate string `yaml:"promptTemplate"`
+}
+
+func collectSetEnvVars() []string {
+	var res []string
+	for _, provider := range ProvidersInitOptions() {
+		for k := range provider.FixedEnv {
+			if _, ok := os.LookupEnv(k); ok {
+				res = append(res, k)
+			}
+		}
+		for _, opt := range provider.Options {
+			if _, ok := os.LookupEnv(opt.EnvVar); ok {
+				res = append(res, opt.EnvVar)
+			}
+		}
+	}
+	return res
 }

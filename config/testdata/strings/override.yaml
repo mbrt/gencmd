@@ -1,0 +1,6 @@
+# Configuration file: $XDG_CONFIG_HOME/gencmd/config.yaml
+# Environment file: $XDG_CONFIG_HOME/gencmd/.env
+llm:
+    provider: ""
+    modelName: gemini-2.5-flash
+    promptTemplate: custom template
