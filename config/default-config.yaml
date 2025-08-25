@@ -1,12 +1,12 @@
 # yaml-language-server: $schema=https://raw.githubusercontent.com/mbrt/gencmd/refs/heads/main/config-schema.json
-llm:
-  # The provider is auto-detected from environment variables, unless overridden below
-  # provider: googleai
-  # modelName: gemini-2.0-flash-lite
-  # promptTemplate: |
-  #   You are a command line expert. Generate up to 5 shell command alternatives that implement the following description:
-  #   {{.UserInput}}
-  #
-  # Optional OpenAI configuration
-  # openai:
-  #   baseUrl: https://api.openai.com/v1
+
+# The provider is auto-detected from environment variables, unless overridden below
+# llm:
+#   provider: googleai
+#   modelName: gemini-2.0-flash-lite
+#   promptTemplate: |
+#     You are a command line expert. Generate up to 5 shell command alternatives that implement the following description:
+#     {{.UserInput}}
+#
+#   openai:  # optional OpenAI configuration
+#     baseUrl: https://api.openai.com/v1
