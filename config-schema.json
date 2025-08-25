@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema",
+  "$id": "https://github.com/mbrt/gencmd/config/config",
+  "$ref": "#/$defs/Config",
+  "$defs": {
+    "Config": {
+      "properties": {
+        "llm": {
+          "$ref": "#/$defs/LLMConfig"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "llm"
+      ]
+    },
+    "LLMConfig": {
+      "properties": {
+        "provider": {
+          "type": "string"
+        },
+        "modelName": {
+          "type": "string"
+        },
+        "promptTemplate": {
+          "type": "string"
+        },
+        "openai": {
+          "$ref": "#/$defs/OpenAIConfig"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "OpenAIConfig": {
+      "properties": {
+        "baseUrl": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    }
+  }
+}
