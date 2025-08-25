@@ -111,10 +111,14 @@ func (c Config) String() string {
 
 // LLMConfig represents the configuration for the Language Model.
 type LLMConfig struct {
-	Provider       string        `yaml:"provider,omitempty"`
-	ModelName      string        `yaml:"modelName,omitempty"`
-	PromptTemplate string        `yaml:"promptTemplate,omitempty"`
-	OpenAI         *OpenAIConfig `yaml:"openai,omitempty"`
+	// Provider is the name of the LLM provider.
+	Provider string `yaml:"provider,omitempty"`
+	// ModelName is the name of the model to use, without prefixes (e.g. gemini-2.0-flash-lite).
+	ModelName string `yaml:"modelName,omitempty"`
+	// PromptTemplate is the template for the prompt to send to the LLM. The user input will be inserted into the {{.UserInput}} placeholder.
+	PromptTemplate string `yaml:"promptTemplate,omitempty"`
+	// OpenAI represents the configuration for OpenAI LLMs.
+	OpenAI *OpenAIConfig `yaml:"openai,omitempty"`
 }
 
 // OpenAIConfig represents the configuration for OpenAI LLMs.

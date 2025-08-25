@@ -14,10 +14,13 @@ func do() error {
 	// Downgrade the schema version, as not all editors support the newer one:
 	// (https://json-schema.org/draft/2020-12/schema)
 	jsonschema.Version = "https://json-schema.org/draft-07/schema"
-	reflector := jsonschema.Reflector{
+	r := jsonschema.Reflector{
 		FieldNameTag: "yaml",
 	}
-	s := reflector.Reflect(config.Config{})
+	if err := r.AddGoComments("github.com/mbrt/gencmd", "./config/"); err != nil {
+		return err
+	}
+	s := r.Reflect(config.Config{})
 	data, err := json.MarshalIndent(s, "", "  ")
 	if err != nil {
 		return err
