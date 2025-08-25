@@ -1,8 +1,6 @@
 # Configuration file: $XDG_CONFIG_HOME/gencmd/config.yaml
 # Environment file: $XDG_CONFIG_HOME/gencmd/.env
 llm:
-    provider: ""
-    modelName: ""
     promptTemplate: |
         You are a command line expert. Generate up to 5 shell command alternatives that implement the following description:
         {{.UserInput}}
