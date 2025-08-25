@@ -26,3 +26,6 @@ jobs:
 
     - name: Run Revive linter
       uses: docker://morphy/revive-action:v2
+
+    - name: Build
+      run: make
