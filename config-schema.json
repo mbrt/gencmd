@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema",
+  "$id": "https://github.com/mbrt/gencmd/config/config",
+  "$ref": "#/$defs/Config",
+  "$defs": {
+    "Config": {
+      "properties": {
+        "llm": {
+          "$ref": "#/$defs/LLMConfig"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "llm"
+      ],
+      "description": "Config represents the configuration structure for the application."
+    },
+    "LLMConfig": {
+      "properties": {
+        "provider": {
+          "type": "string",
+          "description": "Provider is the name of the LLM provider."
+        },
+        "modelName": {
+          "type": "string",
+          "description": "ModelName is the name of the model to use, without prefixes (e.g. gemini-2.0-flash-lite)."
+        },
+        "promptTemplate": {
+          "type": "string",
+          "description": "PromptTemplate is the template for the prompt to send to the LLM. The user input will be inserted into the {{.UserInput}} placeholder."
+        },
+        "openai": {
+          "$ref": "#/$defs/OpenAIConfig",
+          "description": "OpenAI represents the configuration for OpenAI LLMs."
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "description": "LLMConfig represents the configuration for the Language Model."
+    },
+    "OpenAIConfig": {
+      "properties": {
+        "baseUrl": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "description": "OpenAIConfig represents the configuration for OpenAI LLMs."
+    }
+  }
+}

@@ -1,3 +1,4 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/mbrt/gencmd/refs/heads/main/config-schema.json
 llm:
   # The provider is auto-detected from environment variables, unless overridden below
   # provider: googleai
@@ -5,3 +6,7 @@ llm:
   # promptTemplate: |
   #   You are a command line expert. Generate up to 5 shell command alternatives that implement the following description:
   #   {{.UserInput}}
+  #
+  # Optional OpenAI configuration
+  # openai:
+  #   baseUrl: https://api.openai.com/v1
