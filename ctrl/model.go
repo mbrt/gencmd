@@ -110,8 +110,13 @@ func newVertexAIModel(ctx context.Context, cfg config.LLMConfig) (Model, error) 
 }
 
 func newOpenAIModel(ctx context.Context, cfg config.LLMConfig) (Model, error) {
+	var opts []option.RequestOption
+	if cfg.OpenAI != nil && cfg.OpenAI.BaseURL != "" {
+		opts = append(opts, option.WithBaseURL(cfg.OpenAI.BaseURL))
+	}
+
 	g, err := genkit.Init(ctx,
-		genkit.WithPlugins(&openai.OpenAI{}),
+		genkit.WithPlugins(&openai.OpenAI{Opts: opts}),
 		genkit.WithDefaultModel("openai/"+cfg.ModelName),
 	)
 	if err != nil {

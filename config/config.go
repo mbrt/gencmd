@@ -111,9 +111,15 @@ func (c Config) String() string {
 
 // LLMConfig represents the configuration for the Language Model.
 type LLMConfig struct {
-	Provider       string `yaml:"provider"`
-	ModelName      string `yaml:"modelName"`
-	PromptTemplate string `yaml:"promptTemplate"`
+	Provider       string        `yaml:"provider"`
+	ModelName      string        `yaml:"modelName"`
+	PromptTemplate string        `yaml:"promptTemplate"`
+	OpenAI         *OpenAIConfig `yaml:"openai,omitempty"`
+}
+
+// OpenAIConfig represents the configuration for OpenAI LLMs.
+type OpenAIConfig struct {
+	BaseURL string `yaml:"baseUrl"`
 }
 
 func collectSetEnvVars() []string {
