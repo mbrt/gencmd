@@ -9,6 +9,7 @@ import (
 	"text/template"
 
 	"github.com/firebase/genkit/go/ai"
+	"github.com/firebase/genkit/go/core/api"
 	"github.com/firebase/genkit/go/genkit"
 	"github.com/firebase/genkit/go/plugins/compat_oai/anthropic"
 	"github.com/firebase/genkit/go/plugins/compat_oai/openai"
@@ -75,13 +76,10 @@ func (m Model) GenerateCommands(ctx context.Context, prompt string) ([]string, e
 }
 
 func newGeminiModel(ctx context.Context, cfg config.LLMConfig) (Model, error) {
-	g, err := genkit.Init(ctx,
+	g := genkit.Init(ctx,
 		genkit.WithPlugins(&googlegenai.GoogleAI{}),
 		genkit.WithDefaultModel("googleai/"+cfg.ModelName),
 	)
-	if err != nil {
-		return Model{}, fmt.Errorf("initializing genkit: %w", err)
-	}
 	return Model{
 		client:         g,
 		promptTemplate: cfg.PromptTemplate,
@@ -89,20 +87,17 @@ func newGeminiModel(ctx context.Context, cfg config.LLMConfig) (Model, error) {
 }
 
 func newVertexAIModel(ctx context.Context, cfg config.LLMConfig) (Model, error) {
-	var plugin genkit.Plugin
+	var plugin api.Plugin
 	if strings.HasPrefix(cfg.ModelName, "claude-") {
 		plugin = &modelgarden.Anthropic{}
 	} else {
 		plugin = &googlegenai.VertexAI{}
 	}
 
-	g, err := genkit.Init(ctx,
+	g := genkit.Init(ctx,
 		genkit.WithPlugins(plugin),
 		genkit.WithDefaultModel("vertexai/"+cfg.ModelName),
 	)
-	if err != nil {
-		return Model{}, fmt.Errorf("initializing genkit: %w", err)
-	}
 	return Model{
 		client:         g,
 		promptTemplate: cfg.PromptTemplate,
@@ -115,13 +110,10 @@ func newOpenAIModel(ctx context.Context, cfg config.LLMConfig) (Model, error) {
 		opts = append(opts, option.WithBaseURL(cfg.OpenAI.BaseURL))
 	}
 
-	g, err := genkit.Init(ctx,
+	g := genkit.Init(ctx,
 		genkit.WithPlugins(&openai.OpenAI{Opts: opts}),
 		genkit.WithDefaultModel("openai/"+cfg.ModelName),
 	)
-	if err != nil {
-		return Model{}, fmt.Errorf("initializing genkit: %w", err)
-	}
 	return Model{
 		client:         g,
 		promptTemplate: cfg.PromptTemplate,
@@ -129,7 +121,7 @@ func newOpenAIModel(ctx context.Context, cfg config.LLMConfig) (Model, error) {
 }
 
 func newAnthropicModel(ctx context.Context, cfg config.LLMConfig) (Model, error) {
-	g, err := genkit.Init(ctx,
+	g := genkit.Init(ctx,
 		genkit.WithPlugins(&anthropic.Anthropic{
 			Opts: []option.RequestOption{
 				option.WithAPIKey(os.Getenv("ANTHROPIC_API_KEY")),
@@ -137,9 +129,6 @@ func newAnthropicModel(ctx context.Context, cfg config.LLMConfig) (Model, error)
 		}),
 		genkit.WithDefaultModel("anthropic/"+cfg.ModelName),
 	)
-	if err != nil {
-		return Model{}, fmt.Errorf("initializing genkit: %w", err)
-	}
 	return Model{
 		client:         g,
 		promptTemplate: cfg.PromptTemplate,
@@ -154,19 +143,16 @@ func newOllamaModel(ctx context.Context, cfg config.LLMConfig) (Model, error) {
 	plugin := &ollama.Ollama{
 		ServerAddress: host,
 	}
-	g, err := genkit.Init(ctx,
+	g := genkit.Init(ctx,
 		genkit.WithPlugins(plugin),
 	)
-	if err != nil {
-		return Model{}, fmt.Errorf("initializing genkit: %w", err)
-	}
 
 	model := plugin.DefineModel(g,
 		ollama.ModelDefinition{
 			Name: cfg.ModelName,
 			Type: "chat",
 		},
-		&ai.ModelInfo{
+		&ai.ModelOptions{
 			Supports: &ai.ModelSupports{
 				Multiturn:  true,
 				SystemRole: true,
