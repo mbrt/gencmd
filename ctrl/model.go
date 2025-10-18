@@ -16,7 +16,7 @@ import (
 	"github.com/firebase/genkit/go/plugins/googlegenai"
 	"github.com/firebase/genkit/go/plugins/ollama"
 	"github.com/firebase/genkit/go/plugins/vertexai/modelgarden"
-	"github.com/openai/openai-go/option"
+	"github.com/openai/openai-go/v3/option"
 
 	"github.com/mbrt/gencmd/config"
 )
