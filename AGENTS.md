@@ -44,8 +44,8 @@ cfg := config.DefaultFromEnv()
 ```
 
 Current supported providers and default models:
-- **GoogleAI**: `gemini-2.0-flash-lite` (free tier: 200 requests/day)
-- **VertexAI**: `gemini-2.0-flash-lite` (supports Claude models via Model Garden)
+- **GoogleAI**: `gemini-2.5-flash-lite` (free tier: 200 requests/day)
+- **VertexAI**: `gemini-2.5-flash-lite` (supports Claude models via Model Garden)
 - **OpenAI**: `gpt-4o-mini` (supports custom base URLs)
 - **Anthropic**: `claude-3-5-haiku-latest`
 - **Ollama**: `gemma-3` (local inference)

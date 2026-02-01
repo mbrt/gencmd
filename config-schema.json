@@ -24,7 +24,7 @@
         },
         "modelName": {
           "type": "string",
-          "description": "ModelName is the name of the model to use, without prefixes (e.g. gemini-2.0-flash-lite)."
+          "description": "ModelName is the name of the model to use, without prefixes (e.g. gemini-2.5-flash-lite)."
         },
         "promptTemplate": {
           "type": "string",

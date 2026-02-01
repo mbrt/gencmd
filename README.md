@@ -70,7 +70,7 @@ and pull a model (e.g., `ollama pull gemma-3`), then configure gencmd to use it.
 Credentials are stored locally, and NEVER sent anywhere else.
 
 > [!NOTE]
-> By default, `gencmd` uses "gemini-2.0-flash-lite", which has a generous free
+> By default, `gencmd` uses "gemini-2.5-flash-lite", which has a generous free
 > tier of 200 requests per day. More than enough for typical usage. If you want
 > to make sure to block requests over the free tier, use a dedicated GCP project
 > without billing enabled.

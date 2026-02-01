@@ -71,7 +71,7 @@ func DefaultFromEnv() Config {
 	// Model name
 	switch cfg.LLM.Provider {
 	case "googleai", "vertexai":
-		cfg.LLM.ModelName = "gemini-2.0-flash-lite"
+		cfg.LLM.ModelName = "gemini-2.5-flash-lite"
 	case "openai":
 		cfg.LLM.ModelName = "gpt-4o-mini"
 	case "anthropic":
@@ -113,7 +113,7 @@ func (c Config) String() string {
 type LLMConfig struct {
 	// Provider is the name of the LLM provider.
 	Provider string `yaml:"provider,omitempty"`
-	// ModelName is the name of the model to use, without prefixes (e.g. gemini-2.0-flash-lite).
+	// ModelName is the name of the model to use, without prefixes (e.g. gemini-2.5-flash-lite).
 	ModelName string `yaml:"modelName,omitempty"`
 	// PromptTemplate is the template for the prompt to send to the LLM. The user input will be inserted into the {{.UserInput}} placeholder.
 	PromptTemplate string `yaml:"promptTemplate,omitempty"`

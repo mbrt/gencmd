@@ -48,7 +48,7 @@ func TestConfigLoad(t *testing.T) {
 			want: Config{
 				LLM: LLMConfig{
 					Provider:       "googleai",
-					ModelName:      "gemini-2.0-flash-lite",
+					ModelName:      "gemini-2.5-flash-lite",
 					PromptTemplate: defaultPromptTemplate,
 				},
 			},
