@@ -4,16 +4,16 @@ go 1.24.5
 
 require (
 	github.com/adrg/xdg v0.5.3
-	github.com/charmbracelet/bubbles v0.21.0
-	github.com/charmbracelet/bubbletea v1.3.9
-	github.com/charmbracelet/lipgloss v1.1.0
-	github.com/firebase/genkit/go v1.0.2
-	github.com/invopop/jsonschema v0.13.0
+	github.com/charmbracelet/bubbles/v2 v2.2.1
+	github.com/charmbracelet/bubbletea/v2 v2.0.9
+	github.com/charmbracelet/lipgloss/v2 v2.0.6
+	github.com/firebase/genkit/go v1.13.1
+	github.com/invopop/jsonschema v0.14.0
 	github.com/joho/godotenv v1.5.1
 	github.com/muesli/termenv v0.16.0
-	github.com/openai/openai-go v1.12.0
-	github.com/spf13/cobra v1.10.1
-	github.com/stretchr/testify v1.11.1
+	github.com/openai/openai-go/v3 v3.56.0
+	github.com/spf13/cobra v1.10.2
+	github.com/stretchr/testify v1.12.1
 	gopkg.in/yaml.v3 v3.0.1
 )
 
